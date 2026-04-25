@@ -432,7 +432,7 @@ async function initFB(){
   }catch(e){console.error(e);DB.soldiers=mergeSoldiers([]);document.getElementById('loadingScreen').style.display='none';buildDrop();}
 }
 
-function saveInv() { localStorage.setItem('army_inv6', JSON.stringify(INV)); }
+function saveInv() { ); }
 function getSol(pid) { return DB.soldiers.find(function(s) { return s.pid === pid; }); }
 
 // ══ UI HELPERS ══
