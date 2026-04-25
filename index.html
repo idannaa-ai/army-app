@@ -111,6 +111,385 @@ input:focus,select:focus{outline:none;border-color:var(--ol)}
 .nk-list-row:hover{background:var(--sap);}
 .nk-list-active{background:var(--sal)!important;border-right:3px solid var(--ol);}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+<style>
+.rep-soldier{border:1px solid var(--bo);border-radius:var(--r);margin-bottom:9px;overflow:hidden}
+.rep-sol-hdr{background:var(--old);color:var(--sal);padding:8px 13px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.rep-sol-body{padding:9px 13px}
+.rep-item{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--bo)}
+.rep-item:last-child{border-bottom:none}
+.rep-item-name{flex:1;font-size:12px;font-weight:600;color:var(--old)}
+.rep-btn{padding:3px 8px;border:2px solid var(--bo);border-radius:7px;background:#fff;font-family:Heebo,sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
+.rep-btn.ok{background:#e8f4e8;border-color:var(--go);color:var(--go)}
+.rep-btn.miss{background:#fde8e6;border-color:var(--re);color:var(--re)}
+.rep-btn.warn{background:#fef3e2;border-color:var(--am);color:var(--am)}
+.rep-note{border:1px solid var(--bo);border-radius:5px;padding:3px 7px;font-size:11px;font-family:Heebo,sans-serif;width:120px;direction:rtl}
+.status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:9px;margin-bottom:9px}
+.status-card{border-radius:var(--r);padding:10px 13px;box-shadow:var(--sh)}
+.status-card.done{background:#e8f4e8;border-right:3px solid var(--go)}
+.status-card.miss{background:#fde8e6;border-right:3px solid var(--re)}
+.status-card.late{background:#fef3e2;border-right:3px solid var(--am)}
+.status-card-name{font-size:12px;font-weight:800;color:var(--old)}
+.status-card-sub{font-size:10px;color:var(--kh);margin-top:2px}
+.hist-row{padding:9px 13px;border-bottom:1px solid var(--bo);font-size:12px}
+.hist-row:last-child{border-bottom:none}
+.hist-date{font-weight:700;color:var(--old);margin-bottom:4px;display:flex;justify-content:space-between}
+.hist-item{display:flex;gap:6px;padding:2px 0;align-items:flex-start;flex-wrap:wrap}
+.hist-ok{color:var(--go)}.hist-miss{color:var(--re)}.hist-warn{color:var(--am)}
+.peq-item{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--bo);transition:background .15s}
+.peq-item:last-child{border-bottom:none}.peq-item:hover{background:var(--sap)}
+.peq-status{width:34px;height:34px;border-radius:7px;border:2px solid var(--bo);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.peq-status.signed{background:#e8f4e8;border-color:var(--go)}
+.peq-status.cleared{background:var(--sap);border-color:var(--bo)}
+.peq-name{font-weight:700;font-size:13px;color:var(--old)}
+.peq-meta{font-size:11px;color:var(--kh);display:flex;gap:7px;flex-wrap:wrap;margin-top:2px}
+.ammo-item{display:flex;align-items:center;gap:9px;padding:9px 13px;border-bottom:1px solid var(--bo)}
+.ammo-item:last-child{border-bottom:none}
+.ammo-name{flex:1;font-size:12px;font-weight:700;color:var(--old)}
+.ammo-sub{font-size:10px;color:var(--kh);margin-top:1px}
+.ammo-qty{width:72px;padding:5px 8px;border:2px solid var(--bo);border-radius:var(--r);font-family:Heebo,sans-serif;font-size:13px;font-weight:700;text-align:center;direction:ltr}
+.ammo-qty:focus{outline:none;border-color:var(--ol)}
+.ammo-section-hdr{background:var(--old);color:var(--sal);padding:7px 13px;font-size:11px;font-weight:700;border-radius:var(--r) var(--r) 0 0;display:flex;justify-content:space-between}
+.ammo-alloc-row{display:flex;align-items:center;gap:7px;padding:6px 13px;border-bottom:1px solid var(--bo);font-size:12px}
+.ammo-alloc-plat{font-weight:700;color:var(--old);min-width:75px}
+.ammo-alloc-inp{width:55px;padding:3px 7px;border:2px solid var(--bo);border-radius:6px;font-family:Heebo,sans-serif;font-size:12px;text-align:center;direction:ltr}
+.ammo-alloc-inp:focus{outline:none;border-color:var(--ol)}
+</style>
+
+// ── REPORT ──
+var DEADLINE=18; var repSelPlat=null;
+function getTodayKey(){var d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0')+'-'+d.getDate().toString().padStart(2,'0');}
+function isPastDeadline(){return new Date().getHours()>=DEADLINE;}
+function renderReport(){
+  var today=getTodayKey();renderDailyStatus(today);renderReportHistory();
+  var bw=document.getElementById('rep-plat-btns');bw.innerHTML='';
+  var todayReps=(DB.reports||{})[today]||{};
+  ['1','2','3','מפלג'].forEach(function(p){
+    var done=todayReps[p]&&todayReps[p].completed;
+    var solCount=DB.soldiers.filter(function(s){return s.platoon===p&&Object.keys(s.nashkia||{}).length>0;}).length;
+    var btn=document.createElement('div');
+    btn.style.cssText='border:2px solid '+(done?'var(--go)':'var(--bo)')+';border-radius:12px;padding:14px;cursor:pointer;text-align:center;background:'+(done?'#e8f4e8':'var(--wh)')+';transition:all .2s;';
+    btn.innerHTML='<div style="font-size:17px;font-weight:900;color:var(--old);">'+p+'</div><div style="font-size:11px;color:var(--kh);margin-top:3px;">'+solCount+' חיילים</div><div style="font-size:11px;margin-top:5px;font-weight:600;color:'+(done?'var(--go)':'var(--re)')+';">'+(done?'דווח ב-'+todayReps[p].time:(isPastDeadline()?'לא דווח':'ממתין'))+'</div>';
+    btn.onclick=(function(pl){return function(){openRepPlat(pl);};})(p);
+    bw.appendChild(btn);
+  });
+  document.getElementById('rep-step1').style.display='block';
+  document.getElementById('rep-step2').style.display='none';
+}
+function openRepPlat(plat){
+  repSelPlat=plat;var today=getTodayKey();
+  document.getElementById('rep-step1').style.display='none';
+  document.getElementById('rep-step2').style.display='block';
+  document.getElementById('rep-plat-title').textContent='מחלקה '+plat;
+  var todayRep=((DB.reports||{})[today]||{})[plat];
+  var doneEl=document.getElementById('rep-already-done');
+  if(todayRep&&todayRep.completed){doneEl.style.cssText='background:#e8f4e8;color:var(--go);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;';doneEl.textContent='דווח ע"י '+todayRep.reporter+' ב-'+todayRep.time;}
+  else doneEl.style.cssText='';
+  var sb=document.getElementById('rep-status-bar');sb.innerHTML='';
+  var past=isPastDeadline();
+  var bar=document.createElement('div');bar.style.cssText='padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;background:'+(past?'#fde8e6':'#e8f4e8')+';color:'+(past?'var(--re)':'var(--go)');
+  bar.textContent=past?'עבר הדד-ליין (18:00)':'דד-ליין: 18:00';sb.appendChild(bar);
+  var soldiers=DB.soldiers.filter(function(s){return s.platoon===plat&&Object.keys(s.nashkia||{}).length>0;}).sort(function(a,b){return a.name.localeCompare(b.name,'he');});
+  var list=document.getElementById('rep-soldiers-list');list.innerHTML='';
+  if(!soldiers.length){list.innerHTML='<div class="nd">אין חיילים עם נשקייה</div>';return;}
+  soldiers.forEach(function(s){
+    var prevData=todayRep?(todayRep.soldiers||{})[s.pid]:null;
+    var wrap=mk('div',{cls:'rep-soldier'});
+    var hdr=mk('div',{cls:'rep-sol-hdr'});
+    hdr.appendChild(mk('span',{txt:s.name+(s.role?' - '+s.role:'')}));
+    var gRow=mk('div',{style:'display:flex;align-items:center;gap:5px;'});
+    gRow.appendChild(mk('span',{style:'font-size:11px;color:var(--sal);',txt:'רימונים:'}));
+    var gInp=mk('input',{type:'number',style:'width:45px;padding:2px 5px;border-radius:5px;border:none;font-size:12px;font-family:Heebo,sans-serif;text-align:center;',placeholder:'0'});
+    gInp.id='gren_'+s.pid;if(prevData)gInp.value=String(prevData.grenades||'');
+    gRow.appendChild(gInp);gRow.appendChild(mk('span',{style:'font-size:10px;color:rgba(255,255,255,.6);',txt:'/2'}));
+    hdr.appendChild(gRow);wrap.appendChild(hdr);
+    var body=mk('div',{cls:'rep-sol-body'});
+    Object.keys(s.nashkia||{}).sort().forEach(function(item){
+      var prevItem=prevData?(prevData.items||{})[item]:null;
+      var row=mk('div',{cls:'rep-item'});
+      row.appendChild(mk('span',{cls:'rep-item-name',txt:item}));
+      var bg=mk('div',{style:'display:flex;gap:4px;'});
+      ['ok','miss','warn'].forEach(function(st){
+        var lbl=st==='ok'?'קיים':st==='miss'?'חסר':'לא תקין';
+        var b=mk('button',{cls:'rep-btn'+(prevItem&&prevItem.status===st?' '+st:''),txt:lbl});
+        b.id='rb_'+s.pid+'__'+encodeURIComponent(item)+'__'+st;
+        b.addEventListener('click',(function(pid,it,status,btn){return function(){['ok','miss','warn'].forEach(function(x){var sib=document.getElementById('rb_'+pid+'__'+encodeURIComponent(it)+'__'+x);if(sib)sib.className='rep-btn';});btn.className='rep-btn '+status;};})(s.pid,item,st,b));
+        bg.appendChild(b);
+      });
+      row.appendChild(bg);
+      var note=mk('input',{cls:'rep-note',placeholder:'הערה...'});
+      note.id='rn_'+s.pid+'__'+encodeURIComponent(item);
+      if(prevItem&&prevItem.note)note.value=prevItem.note;
+      row.appendChild(note);body.appendChild(row);
+    });
+    wrap.appendChild(body);list.appendChild(wrap);
+  });
+}
+function repBack(){document.getElementById('rep-step1').style.display='block';document.getElementById('rep-step2').style.display='none';repSelPlat=null;}
+window.repBack=repBack;
+function getRepStatus(pid,item){for(var st of['ok','miss','warn']){var b=document.getElementById('rb_'+pid+'__'+encodeURIComponent(item)+'__'+st);if(b&&b.classList.contains(st))return st;}return'ok';}
+function getRepNote(pid,item){var inp=document.getElementById('rn_'+pid+'__'+encodeURIComponent(item));return inp?(inp.value||'').trim():'';}
+function getGren(pid){var inp=document.getElementById('gren_'+pid);return inp?parseInt(inp.value||'0')||0:0;}
+function submitAllReport(){
+  if(!repSelPlat)return;var today=getTodayKey();
+  var soldiers=DB.soldiers.filter(function(s){return s.platoon===repSelPlat&&Object.keys(s.nashkia||{}).length>0;});
+  var soldierData={};
+  soldiers.forEach(function(s){var items={};Object.keys(s.nashkia||{}).forEach(function(item){items[item]={status:getRepStatus(s.pid,item),note:getRepNote(s.pid,item)};});soldierData[s.pid]={items:items,grenades:getGren(s.pid)};});
+  DB.reports=DB.reports||{};DB.reports[today]=DB.reports[today]||{};
+  DB.reports[today][repSelPlat]={soldiers:soldierData,reporter:currentUser?currentUser.name:'',time:new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}),platoon:repSelPlat,completed:true};
+  saveReports();toast('דיווח נשמר - מחלקה '+repSelPlat);repBack();renderReport();
+}
+window.submitAllReport=submitAllReport;
+function renderDailyStatus(today){
+  var el2=document.getElementById('report-daily-status');el2.innerHTML='';
+  var todayReps=(DB.reports||{})[today]||{};var past=isPastDeadline();var doneCount=0;
+  var RPLATS=['1','2','3','מפלג'];
+  var grid=mk('div',{cls:'status-grid'});
+  RPLATS.forEach(function(p){var rep=todayReps[p];var done=rep&&rep.completed;if(done)doneCount++;
+    var card=mk('div',{cls:'status-card '+(done?'done':past?'late':'miss')});
+    card.appendChild(mk('div',{cls:'status-card-name',txt:'מחלקה '+p}));
+    card.appendChild(mk('div',{cls:'status-card-sub',txt:done?rep.reporter+' '+rep.time:past?'לא דווח':'ממתין'}));
+    grid.appendChild(card);
+  });
+  if(doneCount===RPLATS.length)el2.appendChild(mk('div',{style:'background:var(--go);color:#fff;border-radius:var(--r);padding:10px 14px;font-size:13px;font-weight:800;margin-bottom:9px;text-align:center;',txt:'כל המחלקות דיווחו ירוק בעיניים!'}));
+  else if(past){var missing=RPLATS.filter(function(p){return!(todayReps[p]&&todayReps[p].completed);});el2.appendChild(mk('div',{style:'background:var(--re);color:#fff;border-radius:var(--r);padding:9px 13px;font-size:12px;font-weight:700;margin-bottom:9px;',txt:'לא דיווחו: '+missing.join(', ')}));}
+  el2.appendChild(grid);
+}
+function renderReportHistory(){
+  var el2=document.getElementById('report-history');el2.innerHTML='';
+  var reports=DB.reports||{};var dates=Object.keys(reports).sort().reverse().slice(0,60);
+  if(!dates.length){el2.innerHTML='<div class="nd">אין היסטוריה</div>';return;}
+  var RPLATS=['1','2','3','מפלג'];
+  dates.forEach(function(date){
+    var dayReps=reports[date];var allDone=RPLATS.every(function(p){return dayReps[p]&&dayReps[p].completed;});
+    var wrap=mk('div',{cls:'hist-row'});
+    var dHdr=mk('div',{cls:'hist-date'});dHdr.appendChild(mk('span',{txt:date}));dHdr.appendChild(mk('span',{style:'color:'+(allDone?'var(--go)':'var(--re)'),txt:allDone?'הכל':'חסר'}));wrap.appendChild(dHdr);
+    RPLATS.forEach(function(p){var rep=dayReps[p];var row=mk('div',{cls:'hist-item'});
+      if(!rep){row.appendChild(mk('span',{cls:'hist-miss',txt:'מח'+p+' - לא דווח'}));}
+      else{var ok=0,miss=0,warn=0;
+        Object.values(rep.soldiers||{}).forEach(function(sol){Object.values(sol.items||{}).forEach(function(it){if(it.status==='ok')ok++;else if(it.status==='miss')miss++;else warn++;});});
+        var parts=['מח'+p+' | '+rep.reporter+' '+rep.time];if(miss>0)parts.push(miss+' חסר');if(warn>0)parts.push(warn+' לא תקין');
+        row.appendChild(mk('span',{cls:miss>0||warn>0?'hist-warn':'hist-ok',txt:parts.join(' | ')}));
+        var issues=[];
+        Object.entries(rep.soldiers||{}).forEach(function(se){var sol=DB.soldiers.find(function(x){return x.pid===se[0];});
+          Object.entries(se[1].items||{}).forEach(function(ie){if(ie[1].status!=='ok')issues.push((sol?sol.name:se[0])+': '+ie[0]+' - '+(ie[1].status==='miss'?'חסר':'לא תקין')+(ie[1].note?' ('+ie[1].note+')':''));});
+          if(se[1].grenades!==undefined&&se[1].grenades<2)issues.push((sol?sol.name:se[0])+': רימונים '+se[1].grenades+'/2');
+        });
+        if(issues.length){var iw=mk('div',{style:'margin-top:2px;padding-right:10px;'});issues.forEach(function(iss){iw.appendChild(mk('div',{style:'font-size:10px;color:var(--re);',txt:'- '+iss}));});row.appendChild(iw);}
+      }
+      wrap.appendChild(row);
+    });
+    el2.appendChild(wrap);
+  });
+}
+
+// ── PLATOON EQ ──
+var platFlt='all';
+function addPlatoonEq(){
+  var name=(document.getElementById('peq-name').value||'').trim();if(!name){toast('הכנס שם פריט');return;}
+  var catSel=document.getElementById('peq-cat').value;
+  var cat=catSel==='__c__'?(document.getElementById('peq-cat-c').value||'').trim()||'כללי':catSel;
+  INV.platoonEq=INV.platoonEq||[];
+  INV.platoonEq.push({id:Date.now().toString(),name:name,mkt:(document.getElementById('peq-mkt').value||'').trim(),qty:parseInt(document.getElementById('peq-qty').value||'1')||1,cat:cat,signedBy:(document.getElementById('peq-signed-by').value||'').trim(),status:'signed'});
+  saveInv();['peq-name','peq-mkt','peq-qty','peq-signed-by'].forEach(function(id){document.getElementById(id).value='';});
+  renderPlatoonEq();toast(name+' נוסף');
+}
+window.addPlatoonEq=addPlatoonEq;
+function renderPlatoonEq(){
+  var items=INV.platoonEq||[];
+  var cats=['all','אפסנאות','קשר','בונקר','הדרכה'];
+  items.forEach(function(x){if(cats.indexOf(x.cat)<0)cats.push(x.cat);});
+  var fe=document.getElementById('peq-filters');fe.innerHTML='';
+  cats.forEach(function(c){fe.appendChild(mk('button',{cls:'fb'+(platFlt===c?' active':''),txt:(c==='all'?'הכל':c)+' ('+( c==='all'?items.length:items.filter(function(x){return x.cat===c;}).length)+')',onclick:(function(cat){return function(){platFlt=cat;renderPlatoonEq();};})(c)}));});
+  var filtered=platFlt==='all'?items:items.filter(function(x){return x.cat===platFlt;});
+  var el2=document.getElementById('platoon-eq-list');el2.innerHTML='';
+  if(!filtered.length){el2.innerHTML='<div class="nd">אין פריטים</div>';return;}
+  var bycat={};filtered.forEach(function(item){if(!bycat[item.cat])bycat[item.cat]=[];bycat[item.cat].push(item);});
+  Object.keys(bycat).sort().forEach(function(cat){
+    var catItems=bycat[cat];var signed=catItems.filter(function(x){return x.status==='signed';}).length;
+    var hdr=mk('div',{style:'background:var(--old);color:var(--sal);padding:6px 13px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;margin-top:9px;border-radius:8px 8px 0 0;'});
+    hdr.appendChild(mk('span',{txt:cat}));hdr.appendChild(mk('span',{txt:signed+'/'+catItems.length+' חתום'}));el2.appendChild(hdr);
+    var wrap=mk('div',{style:'border:1px solid var(--bo);border-radius:0 0 8px 8px;overflow:hidden;margin-bottom:3px;'});
+    catItems.forEach(function(item){
+      var row=mk('div',{cls:'peq-item'});
+      var stBtn=mk('div',{cls:'peq-status '+(item.status==='signed'?'signed':'cleared'),txt:item.status==='signed'?'V':'',style:'font-size:14px;font-weight:900;color:var(--go);',onclick:function(){item.status=item.status==='signed'?'cleared':'signed';saveInv();renderPlatoonEq();}});
+      var info=mk('div',{style:'flex:1;'});
+      info.appendChild(mk('div',{cls:'peq-name',txt:item.name+(item.qty>1?' x'+item.qty:'')}));
+      var meta=mk('div',{cls:'peq-meta'});if(item.mkt)meta.appendChild(mk('span',{txt:'מקט: '+item.mkt}));if(item.signedBy)meta.appendChild(mk('span',{style:'color:var(--ol);font-weight:600;',txt:'חתם: '+item.signedBy}));info.appendChild(meta);
+      var delBtn=mk('button',{cls:'btn bred bsm',txt:'מחק',style:'opacity:0;',onclick:(function(id){return function(){if(!confirm('מחק?'))return;INV.platoonEq=INV.platoonEq.filter(function(x){return x.id!==id;});saveInv();renderPlatoonEq();};})(item.id)});
+      row.addEventListener('mouseover',function(){delBtn.style.opacity='1';});
+      row.addEventListener('mouseout',function(){delBtn.style.opacity='0';});
+      row.appendChild(stBtn);row.appendChild(info);row.appendChild(delBtn);wrap.appendChild(row);
+    });
+    el2.appendChild(wrap);
+  });
+}
+
+// ── AMMO ──
+var AMMO={napitz:[{id:'lau',name:'לאו',unit:'יח'},{id:'metador',name:'מטאדור',unit:'יח'},{id:'rimon_ras',name:'רסס',unit:'יח'},{id:'rimon_shan',name:'עשן',unit:'יח'},{id:'matul_naf',name:'מטול נפיץ',unit:'יח'},{id:'matul_shan',name:'מטול עשן',unit:'יח'},{id:'matul_tor',name:'מטול תאורה',unit:'יח'}],tachmish:[{id:'am556',name:'5.56',unit:'כדורים'},{id:'am762',name:'7.62',unit:'כדורים'},{id:'am_mag',name:'מאג',unit:'כדורים'},{id:'am_mkk',name:'מקק',unit:'כדורים'},{id:'am_tzel',name:'צלפים',unit:'כדורים'},{id:'am_maklr',name:'מקלר',unit:'מחסניות'}]};
+var ammoTab='napitz';
+function setAmmoTab(tab){ammoTab=tab;document.getElementById('ammo-n').style.display=tab==='napitz'?'block':'none';document.getElementById('ammo-t').style.display=tab==='tachmish'?'block':'none';document.getElementById('ammo-tab-n').className='fb'+(tab==='napitz'?' active':'');document.getElementById('ammo-tab-t').className='fb'+(tab==='tachmish'?' active':'');}
+window.setAmmoTab=setAmmoTab;
+function renderAmmo(){
+  var ammoData=INV.ammo||{};
+  var cats={napitz:AMMO.napitz,tachmish:AMMO.tachmish};
+  Object.keys(cats).forEach(function(cat){
+    var cId=cat==='napitz'?'ammo-n-list':'ammo-t-list';var container=document.getElementById(cId);container.innerHTML='';
+    var wrap=mk('div',{style:'border:1px solid var(--bo);border-radius:8px;overflow:hidden;margin-bottom:7px;'});
+    var hdr=mk('div',{cls:'ammo-section-hdr'});hdr.appendChild(mk('span',{txt:cat==='napitz'?'נפיצה':'תחמיש'}));hdr.appendChild(mk('span',{style:'font-size:10px;opacity:.7;',txt:'בפועל | תקן | עודף/חסר'}));wrap.appendChild(hdr);
+    cats[cat].forEach(function(item){
+      var val=ammoData[item.id]||{qty:0,takan:0};var row=mk('div',{cls:'ammo-item'});
+      var info=mk('div',{style:'flex:1;'});info.appendChild(mk('div',{cls:'ammo-name',txt:item.name}));info.appendChild(mk('div',{cls:'ammo-sub',txt:item.unit}));row.appendChild(info);
+      var tInp=mk('input',{type:'number',style:'width:62px;padding:4px 7px;border:1px dashed var(--bo);border-radius:6px;font-family:Heebo,sans-serif;font-size:11px;text-align:center;direction:ltr;',placeholder:'תקן'});
+      tInp.value=val.takan||'';tInp.addEventListener('change',(function(id){return function(){var d=INV.ammo=INV.ammo||{};d[id]=d[id]||{qty:0,takan:0,allocation:{}};d[id].takan=parseInt(this.value)||0;saveInv();renderAmmo();};})(item.id));row.appendChild(tInp);
+      var qInp=mk('input',{cls:'ammo-qty',type:'number',placeholder:'0'});qInp.value=val.qty||'';
+      qInp.addEventListener('change',(function(id){return function(){var d=INV.ammo=INV.ammo||{};d[id]=d[id]||{qty:0,takan:0,allocation:{}};d[id].qty=parseInt(this.value)||0;INV.ammoHistory=INV.ammoHistory||[];INV.ammoHistory.push({id:id,qty:d[id].qty,date:new Date().toLocaleDateString('he-IL'),time:new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}),reporter:currentUser?currentUser.name:''});if(INV.ammoHistory.length>200)INV.ammoHistory=INV.ammoHistory.slice(-200);saveInv();renderAmmo();};})(item.id));row.appendChild(qInp);
+      var delta=(val.qty||0)-(val.takan||0);row.appendChild(mk('span',{cls:delta>0?'delta-pos':delta<0?'delta-neg':'delta-zero',txt:val.takan?(delta>0?'+':'')+delta:'--'}));
+      wrap.appendChild(row);
+    });
+    container.appendChild(wrap);
+  });
+  renderAmmoAllocation();
+  var f=document.getElementById('ammo-footer');var last=null;if(INV.ammoHistory&&INV.ammoHistory.length){var l=INV.ammoHistory[INV.ammoHistory.length-1];last='עדכון אחרון: '+l.date+' '+l.time+(l.reporter?' - '+l.reporter:'');}f.textContent=last||'';
+  renderAmmoHistory();
+}
+function renderAmmoAllocation(){
+  var el2=document.getElementById('ammo-allocation');el2.innerHTML='';var ammoData=INV.ammo||{};
+  var allItems=AMMO.napitz.concat(AMMO.tachmish);
+  var hasAny=allItems.some(function(item){return(ammoData[item.id]||{}).qty>0;});
+  if(!hasAny){el2.innerHTML='<div class="nd">הכנס כמויות למעלה להקצאה</div>';return;}
+  var RPLATS=['1','2','3','מפלג'];
+  allItems.forEach(function(item){
+    var val=ammoData[item.id]||{qty:0,takan:0,allocation:{}};if(!val.qty)return;
+    var section=mk('div',{style:'margin-bottom:12px;'});
+    var hdr=mk('div',{style:'font-size:12px;font-weight:800;color:var(--old);margin-bottom:5px;display:flex;justify-content:space-between;'});
+    hdr.appendChild(mk('span',{txt:item.name}));
+    var allocated=Object.values(val.allocation||{}).reduce(function(a,b){return a+(parseInt(b)||0);},0);var remaining=(val.qty||0)-allocated;
+    hdr.appendChild(mk('span',{style:'font-size:11px;font-weight:600;color:'+(remaining<0?'var(--re)':remaining>0?'var(--am)':'var(--go)'),txt:'שוייץ: '+allocated+'/'+val.qty+' | נותר: '+remaining}));
+    section.appendChild(hdr);
+    var wrap=mk('div',{style:'border:1px solid var(--bo);border-radius:8px;overflow:hidden;'});
+    RPLATS.forEach(function(p){
+      var row=mk('div',{cls:'ammo-alloc-row'});row.appendChild(mk('span',{cls:'ammo-alloc-plat',txt:'מחלקה '+p}));
+      var inp=mk('input',{cls:'ammo-alloc-inp',type:'number',placeholder:'0'});inp.value=(val.allocation||{})[p]||'';
+      inp.addEventListener('change',(function(id,plat){return function(){var d=INV.ammo=INV.ammo||{};d[id]=d[id]||{qty:0,takan:0,allocation:{}};d[id].allocation=d[id].allocation||{};d[id].allocation[plat]=parseInt(this.value)||0;saveInv();renderAmmoAllocation();};})(item.id,p));
+      row.appendChild(inp);row.appendChild(mk('span',{style:'font-size:11px;color:var(--kh);',txt:item.unit}));wrap.appendChild(row);
+    });
+    section.appendChild(wrap);el2.appendChild(section);
+  });
+}
+function renderAmmoHistory(){
+  var el2=document.getElementById('ammo-history');el2.innerHTML='';
+  var hist=(INV.ammoHistory||[]).slice().reverse().slice(0,50);
+  if(!hist.length){el2.innerHTML='<div class="nd">אין היסטוריה</div>';return;}
+  var allItems=AMMO.napitz.concat(AMMO.tachmish);var byDate={};
+  hist.forEach(function(h){if(!byDate[h.date])byDate[h.date]=[];byDate[h.date].push(h);});
+  Object.keys(byDate).sort().reverse().forEach(function(date){
+    var wrap=mk('div',{cls:'hist-row'});wrap.appendChild(mk('div',{cls:'hist-date',txt:date}));
+    byDate[date].forEach(function(h){
+      var itemName=(allItems.find(function(x){return x.id===h.id;})||{name:h.id}).name;
+      var row=mk('div',{cls:'hist-item'});
+      row.appendChild(mk('span',{txt:h.time+' | '+itemName+': ',style:'color:var(--ol);font-weight:600;'}));
+      row.appendChild(mk('span',{txt:h.qty+(h.reporter?' - '+h.reporter:''),style:'color:var(--dk);'}));
+      wrap.appendChild(row);
+    });
+    el2.appendChild(wrap);
+  });
+}
+
+// ── BULK UPLOAD ──
+function downloadTemplate(){
+  if(typeof XLSX==='undefined'){toast('ספריית Excel לא נטענה');return;}
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet([['שם','מספר אישי','מחלקה','תפקיד','טלפון'],['ישראל ישראלי','1234567','1','לוחם','050-0000000'],['משה כהן','2345678','2','קלע',''],['','','1/2/3/מפלג','','']]);
+  ws['!cols']=[{wch:20},{wch:14},{wch:10},{wch:12},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws,'חיילים');XLSX.writeFile(wb,'template_chayalim.xlsx');
+}
+window.downloadTemplate=downloadTemplate;
+function handleFileUpload(input){
+  var file=input.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=new Uint8Array(e.target.result);var wb=XLSX.read(data,{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(rows.length<2){toast('הקובץ ריק');return;}
+      var hRow=0;
+      for(var i=0;i<Math.min(5,rows.length);i++){var r=rows[i].map(function(c){return String(c).trim();});if(r.some(function(c){return c.indexOf('שם')>=0||c.indexOf('מספר')>=0;})){hRow=i;break;}}
+      var headers=rows[hRow].map(function(c){return String(c).trim();});
+      var cm={name:-1,pid:-1,platoon:-1,role:-1,phone:-1};
+      headers.forEach(function(h,i){if(h.indexOf('שם')>=0&&cm.name<0)cm.name=i;else if(h.indexOf('מספר')>=0)cm.pid=i;else if(h.indexOf('מחלקה')>=0||h.indexOf('מח')>=0)cm.platoon=i;else if(h.indexOf('תפקיד')>=0)cm.role=i;else if(h.indexOf('טלפון')>=0||h.indexOf('פלאפון')>=0)cm.phone=i;});
+      if(cm.name<0||cm.pid<0){toast('לא נמצאו עמודות שם ומספר אישי');return;}
+      var toAdd=[],already=[];
+      for(var r2=hRow+1;r2<rows.length;r2++){
+        var row=rows[r2];var name=String(row[cm.name]||'').trim();var pid=String(row[cm.pid]||'').trim().replace(/\.0$/,'');
+        if(!name||!pid)continue;
+        if(DB.soldiers.find(function(s){return s.pid===pid;})){already.push(name);continue;}
+        var platoon=cm.platoon>=0?String(row[cm.platoon]||'1').trim().replace(/\.0$/,''):'1';
+        if(['1','2','3','מפלג'].indexOf(platoon)<0)platoon='1';
+        toAdd.push({pid:pid,name:name,platoon:platoon,role:cm.role>=0?String(row[cm.role]||'').trim():'לוחם',phone:cm.phone>=0?String(row[cm.phone]||'').trim():'',nashkia:{},log:{},deficiencies:[],extra_items:[]});
+      }
+      var prev=document.getElementById('upload-preview');prev.innerHTML='';
+      if(!toAdd.length){prev.innerHTML='<div class="nd">אין חיילים חדשים'+(already.length?' ('+already.length+' קיימים)':'')+'</div>';return;}
+      var info=document.createElement('div');info.style.cssText='background:var(--sap);border-radius:8px;padding:12px;margin-top:12px;';
+      info.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--old);margin-bottom:8px;">'+toAdd.length+' חיילים לייבוא'+(already.length?' | '+already.length+' כבר קיימים':'')+'</div>';
+      var importBtn=document.createElement('button');importBtn.className='btn bprim';importBtn.textContent='ייבא '+toAdd.length+' חיילים';
+      importBtn.onclick=function(){toAdd.forEach(function(s){DB.soldiers.push(s);});saveDB();buildDrop();toast('יובאו '+toAdd.length+' חיילים');prev.innerHTML='';document.getElementById('file-input').value='';};
+      info.appendChild(importBtn);prev.appendChild(info);
+    }catch(err){toast('שגיאה: '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+window.handleFileUpload=handleFileUpload;
+(function(){
+  var uz=document.getElementById('upload-zone');if(!uz)return;
+  uz.addEventListener('dragover',function(e){e.preventDefault();uz.style.borderColor='var(--ol)';});
+  uz.addEventListener('dragleave',function(){uz.style.borderColor='var(--bo)';});
+  uz.addEventListener('drop',function(e){e.preventDefault();uz.style.borderColor='var(--bo)';var f=e.dataTransfer.files[0];if(f){var inp=document.getElementById('file-input');var dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;handleFileUpload(inp);}});
+})();
+</script>
+
+<style>
+.rep-soldier{border:1px solid var(--bo);border-radius:var(--r);margin-bottom:9px;overflow:hidden}
+.rep-sol-hdr{background:var(--old);color:var(--sal);padding:8px 13px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.rep-sol-body{padding:9px 13px}
+.rep-item{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--bo)}
+.rep-item:last-child{border-bottom:none}
+.rep-item-name{flex:1;font-size:12px;font-weight:600;color:var(--old)}
+.rep-btn{padding:3px 8px;border:2px solid var(--bo);border-radius:7px;background:#fff;font-family:Heebo,sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
+.rep-btn.ok{background:#e8f4e8;border-color:var(--go);color:var(--go)}
+.rep-btn.miss{background:#fde8e6;border-color:var(--re);color:var(--re)}
+.rep-btn.warn{background:#fef3e2;border-color:var(--am);color:var(--am)}
+.rep-note{border:1px solid var(--bo);border-radius:5px;padding:3px 7px;font-size:11px;font-family:Heebo,sans-serif;width:120px;direction:rtl}
+.status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:9px;margin-bottom:9px}
+.status-card{border-radius:var(--r);padding:10px 13px;box-shadow:var(--sh)}
+.status-card.done{background:#e8f4e8;border-right:3px solid var(--go)}
+.status-card.miss{background:#fde8e6;border-right:3px solid var(--re)}
+.status-card.late{background:#fef3e2;border-right:3px solid var(--am)}
+.status-card-name{font-size:12px;font-weight:800;color:var(--old)}
+.status-card-sub{font-size:10px;color:var(--kh);margin-top:2px}
+.hist-row{padding:9px 13px;border-bottom:1px solid var(--bo);font-size:12px}
+.hist-row:last-child{border-bottom:none}
+.hist-date{font-weight:700;color:var(--old);margin-bottom:4px;display:flex;justify-content:space-between}
+.hist-item{display:flex;gap:6px;padding:2px 0;align-items:flex-start;flex-wrap:wrap}
+.hist-ok{color:var(--go)}.hist-miss{color:var(--re)}.hist-warn{color:var(--am)}
+.peq-item{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--bo);transition:background .15s}
+.peq-item:last-child{border-bottom:none}.peq-item:hover{background:var(--sap)}
+.peq-status{width:34px;height:34px;border-radius:7px;border:2px solid var(--bo);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.peq-status.signed{background:#e8f4e8;border-color:var(--go)}
+.peq-status.cleared{background:var(--sap);border-color:var(--bo)}
+.peq-name{font-weight:700;font-size:13px;color:var(--old)}
+.peq-meta{font-size:11px;color:var(--kh);display:flex;gap:7px;flex-wrap:wrap;margin-top:2px}
+.ammo-item{display:flex;align-items:center;gap:9px;padding:9px 13px;border-bottom:1px solid var(--bo)}
+.ammo-item:last-child{border-bottom:none}
+.ammo-name{flex:1;font-size:12px;font-weight:700;color:var(--old)}
+.ammo-sub{font-size:10px;color:var(--kh);margin-top:1px}
+.ammo-qty{width:72px;padding:5px 8px;border:2px solid var(--bo);border-radius:var(--r);font-family:Heebo,sans-serif;font-size:13px;font-weight:700;text-align:center;direction:ltr}
+.ammo-qty:focus{outline:none;border-color:var(--ol)}
+.ammo-section-hdr{background:var(--old);color:var(--sal);padding:7px 13px;font-size:11px;font-weight:700;border-radius:var(--r) var(--r) 0 0;display:flex;justify-content:space-between}
+.ammo-alloc-row{display:flex;align-items:center;gap:7px;padding:6px 13px;border-bottom:1px solid var(--bo);font-size:12px}
+.ammo-alloc-plat{font-weight:700;color:var(--old);min-width:75px}
+.ammo-alloc-inp{width:55px;padding:3px 7px;border:2px solid var(--bo);border-radius:6px;font-family:Heebo,sans-serif;font-size:12px;text-align:center;direction:ltr}
+.ammo-alloc-inp:focus{outline:none;border-color:var(--ol)}
 </style>
 </head>
 <body>
@@ -256,6 +635,156 @@ input:focus,select:focus{outline:none;border-color:var(--ol)}
 <script id="data-inventory" type="application/json">{"actual": {"קלע סער": 7, "M16": 1, "M4": 50, "מטולון M320": 4, "נגב 5.56": 4, "נגב 7.62": 2, "מאג": 0, "מקלר": 0, "מק\"כ 0.5": 0, "HTR 338": 0, "מקלרון": 0, "M-24 חדש": 0, "מק פורק": 58, "קנה לנגב 5.56": 0, "קנה לנגב 7.62": 0, "קנה למאג": 0, "אקילה X4": 8, "אקילה X6": 0, "NYX": 1, "מיקרון": 0, "שח\"ע": 5, "שח\"ע ממותג": 4, "שח\"מ כחולה": 3, "שח''מ ירוקה": 5, "ליאור": 0, "ערמון": 1, "טרמיס": 3, "עכבר": 0, "עדי": 0, "עמית": 0, "עמית איכון": 0, "וילון": 0, "עידו": 3, "פליר T75": 0, "רחפן איבו": 0, "אבטה": 0, "משקפי אבטה": 0, "שלט אבטה": 0, "מטריס 30": 0, "שלט מטריס 30": 0, "כדור ברזל": 0, "טריגיקון": 13, "מטלון ישן": 3, "מטלון חדש": 2, "לאופולד 2": 0, "לאופולד 6.5": 0, "מרק 5": 0, "מרק 6": 0, "ציין לייזר לנגב": 3, "סמן PACK": 11, "מפרומור": 5, "כוונת M5": 42, "מפרולייט": 0, "זאבון": 4, "פיגיון": 0, "סמן לייזר למפקד": 0, "נטלי": 0, "סמן לייזר ללאו": 0, "יראור": 0, "משקפת": 5, "מצפן": 4, "משקפת 80*15": 0, "שבשבת רוח": 0, "מטל סרוג 10": 0, "מטל סרוג 20": 0, "ישלט": 0, "צגון": 0, "אורלי": 0}, "takan": {"קלע סער": 18, "M16": 8, "M4": 55, "מטולון M320": 9, "נגב 5.56": 7, "נגב 7.62": 2, "מאג": 2, "מקלר": 1, "מק\"כ 0.5": 0, "HTR 338": 0, "מקלרון": 0, "M-24 חדש": 0, "קנה לנגב 5.56": 7, "קנה לנגב 7.62": 2, "קנה למאג": 2, "אקילה X4": 14, "אקילה X6": 0, "NYX": 1, "מיקרון": 1, "שח\"ע": 5, "שח\"ע ממותג": 3, "שח\"מ כחולה": 8, "שח''מ ירוקה": 6, "ליאור": 1, "ערמון": 1, "טרמיס": 3, "עכבר": 2, "עדי": 0, "עמית": 1, "עמית איכון": 0, "וילון": 0, "עידו": 3, "פליר T75": 0, "רחפן איבו": 0, "אבטה": 6, "משקפי אבטה": 3, "שלט אבטה": 3, "מטריס 30": 0, "שלט מטריס 30": 0, "מטלון ישן": 3, "מטלון חדש": 0, "לאופולד 2": 0, "לאופולד 6.5": 0, "ציין לייזר לנגב": 9, "סמן PACK": 11, "מפרומור": 6, "כוונת M5": 49, "מפרולייט": 0, "זאבון": 9, "פיגיון": 1, "סמן לייזר למפקד": 1, "נטלי": 2, "סמן לייזר ללאו": 6, "יראור": 0, "משקפת": 14, "מצפן": 14, "משקפת 80*15": 0, "שבשבת רוח": 0, "מטל סרוג 10": 0, "מטל סרוג 20": 0, "ישלט": 0, "אורלי": 0}, "unallocated": {"קלע סער": 11, "M16": 7, "M4": 5, "מטולון M320": 5, "נגב 5.56": 3, "נגב 7.62": 0, "מאג": 2, "מקלר": 1, "מק\"כ 0.5": 0, "HTR 338": 0, "מקלרון": 0, "M-24 חדש": 0, "אקילה X4": 6, "אקילה X6": 0, "NYX": 0, "מיקרון": 1, "שח\"ע": 0, "שח\"ע ממותג": -1, "שח\"מ כחולה": 5, "שח''מ ירוקה": 1, "ליאור": 1, "ערמון": 0, "טרמיס": 0, "עכבר": 2, "עדי": 0, "עמית": 1, "עמית איכון": 0, "וילון": 0, "עידו": 0, "פליר T75": 0, "רחפן איבו": 0, "אבטה": 6, "משקפי אבטה": 3, "שלט אבטה": 3, "מטריס 30": 0, "שלט מטריס 30": 0, "מטלון ישן": 0, "מטלון חדש": -2, "לאופולד 2": 0, "לאופולד 6.5": 0, "ציין לייזר לנגב": 6, "סמן PACK": 0, "מפרומור": 1, "כוונת M5": 7, "מפרולייט": 0, "זאבון": 5, "פיגיון": 1, "סמן לייזר למפקד": 1, "נטלי": 2, "סמן לייזר ללאו": 6, "יראור": 0, "משקפת": 9, "מצפן": 10, "משקפת 80*15": 0, "שבשבת רוח": 0, "מטל סרוג 10": 0, "מטל סרוג 20": 0, "ישלט": 0, "אורלי": 0}}</script>
 <script id="data-logitems" type="application/json">["קרמי קדמי", "קרמי אחורי", "מחסניות", "רצועות לנשק", "ערכת נקנש", "שק חפצים", "חולצת דגמ\"ח", "מכנס דגמ\"ח", "כובע עבודה", "חגורת ב'", "ווסט לוחם א.נ", "ווסט מודולרי מרום דולפין", "ווסט מטול", "ווסט מאג", "ווסט חובש", "ווסט נגב", "קסדה", "שלוקר", "מימיות", "שק שינה", "ת.א", "ח.ע cat", "ברכיות", "משקפי מגן (שומר אחי)", "את חפירה", "תיק לאו ( 90)", "רשת הסוואה", "שכפ\"צ", "חליפת סערה", "נעלי חיר"]</script>
 
+
+<div class="scr" id="s-report">
+  <div class="card">
+    <h2>📡 ירוק בעיניים — דיווח יומי</h2>
+    <div id="rep-step1"><p style="font-size:13px;color:var(--kh);margin-bottom:14px;">בחר מחלקה לדיווח:</p><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:9px;" id="rep-plat-btns"></div></div>
+    <div id="rep-step2" style="display:none;">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap;">
+        <button class="btn bsec bsm" onclick="repBack()">← חזור</button>
+        <span style="font-size:14px;font-weight:800;color:var(--old);" id="rep-plat-title"></span>
+        <span id="rep-already-done"></span>
+      </div>
+      <div id="rep-status-bar" style="margin-bottom:10px;"></div>
+      <div id="rep-soldiers-list"></div>
+      <button class="btn bprim" style="width:100%;padding:12px;font-size:13px;margin-top:10px;" onclick="submitAllReport()">📡 שלח דיווח מלא</button>
+    </div>
+  </div>
+  <div class="card"><h3>📊 סטטוס דיווחים היום</h3><div id="report-daily-status"></div></div>
+  <div class="card"><h3>🕐 היסטוריה (60 יום)</h3><div id="report-history"></div></div>
+</div>
+
+<div class="scr" id="s-platoon">
+  <div class="card">
+    <h2>🏕️ ציוד פלוגתי</h2>
+    <div style="background:var(--sap);border-radius:var(--r);padding:12px;margin-bottom:14px;">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">
+        <div class="fg" style="flex:1;min-width:160px;"><label>שם פריט *</label><input id="peq-name" placeholder="שם הפריט"></div>
+        <div class="fg" style="min-width:90px;"><label>מק&quot;ט</label><input id="peq-mkt" placeholder="מספר סידורי"></div>
+        <div class="fg" style="min-width:65px;"><label>כמות</label><input id="peq-qty" type="number" placeholder="1" style="width:65px;"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="fg" style="min-width:150px;"><label>קטגוריה</label>
+          <select id="peq-cat" onchange="document.getElementById('peq-cat-cw').style.display=this.value==='__c__'?'flex':'none'">
+            <option value="אפסנאות">אפסנאות</option><option value="קשר">קשר</option>
+            <option value="בונקר">בונקר</option><option value="הדרכה">הדרכה</option>
+            <option value="__c__">אחר...</option>
+          </select>
+        </div>
+        <div class="fg" style="min-width:130px;display:none;" id="peq-cat-cw"><label>שם קטגוריה</label><input id="peq-cat-c" placeholder="הקלד..."></div>
+        <div class="fg" style="flex:1;min-width:130px;"><label>חתום על ידי</label><input id="peq-signed-by" placeholder="שם החותם"></div>
+        <button class="btn bprim" onclick="addPlatoonEq()">הוסף</button>
+      </div>
+    </div>
+    <div class="frow" id="peq-filters"></div>
+    <div id="platoon-eq-list"></div>
+  </div>
+</div>
+
+<div class="scr" id="s-ammo">
+  <div class="card">
+    <h2>💥 דוח תחמושת</h2>
+    <div class="frow" style="margin-bottom:14px;">
+      <button class="fb active" id="ammo-tab-n" onclick="setAmmoTab('napitz')">נפיצה</button>
+      <button class="fb" id="ammo-tab-t" onclick="setAmmoTab('tachmish')">תחמיש</button>
+    </div>
+    <div id="ammo-n"><div id="ammo-n-list"></div></div>
+    <div id="ammo-t" style="display:none;"><div id="ammo-t-list"></div></div>
+    <div style="margin-top:16px;border-top:2px solid var(--bo);padding-top:12px;">
+      <h3 style="margin-bottom:10px;">הקצאה מחלקתית</h3><div id="ammo-allocation"></div>
+    </div>
+    <div id="ammo-footer" style="margin-top:10px;font-size:11px;color:var(--kh);text-align:left;"></div>
+  </div>
+  <div class="card"><h3>היסטוריית עדכונים</h3><div id="ammo-history"></div></div>
+</div>
+</body></html>'
+  ];
+  w.document.write(parts.join(''));
+  w.document.close();
+  w.onload = function() { w.print(); };
+}
+
+onAuthStateChanged(auth,function(user){
+  if(user){var ek=user.email.toLowerCase();
+    if(ALLOWED_EMAILS.indexOf(ek)<0){signOut(auth);document.getElementById('loadingMsg').textContent='אין הרשאה: '+user.email;document.getElementById('loginBtn').style.display='flex';document.getElementById('loadingSpinner').style.display='none';return;}
+    currentUser=USER_ROLES[ek]||{name:user.email,platoon:'all',canReport:true,viewAll:true};currentUser.email=ek;
+    var un=document.getElementById('userNameEl');if(un)un.textContent=currentUser.name;
+    var so=document.getElementById('signOutBtn');if(so)so.style.display='block';
+    setLabels();initFB();
+  }else{document.getElementById('loadingSpinner').style.display='none';document.getElementById('loadingMsg').textContent='נדרשת כניסה';document.getElementById('loginBtn').style.display='flex';}
+});
+document.getElementById('loginBtn').addEventListener('click',function(){
+  document.getElementById('loadingSpinner').style.display='block';document.getElementById('loginErr').style.display='none';
+  signInWithPopup(auth,provider).catch(function(e){document.getElementById('loadingSpinner').style.display='none';document.getElementById('loginErr').textContent=e.message;document.getElementById('loginErr').style.display='block';document.getElementById('loginBtn').style.display='flex';});
+});
+window.doSignOut=function(){if(confirm('להתנתק?'))signOut(auth);};
+window.resetDB=function(){if(!confirm('אפס DB?'))return;DB.soldiers=SOLDIERS.map(function(s){return{pid:s.pid,name:s.name,platoon:s.platoon,role:s.role||'',phone:s.phone||'',nashkia:s.nashkia||{},log:s.log||{},deficiencies:[],extra_items:[]};});DB.deleted=[];DB.reports={};INV={actual:{},takan:{},edited:{},log:[],platoonEq:[],ammo:{},ammoHistory:[]};saveDB();saveInv();saveReports();buildDrop();alert('DB אופס');};
+
+<div class="scr" id="s-report">
+  <div class="card">
+    <h2>📡 ירוק בעיניים — דיווח יומי</h2>
+    <div id="rep-step1"><p style="font-size:13px;color:var(--kh);margin-bottom:14px;">בחר מחלקה לדיווח:</p><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:9px;" id="rep-plat-btns"></div></div>
+    <div id="rep-step2" style="display:none;">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap;">
+        <button class="btn bsec bsm" onclick="repBack()">← חזור</button>
+        <span style="font-size:14px;font-weight:800;color:var(--old);" id="rep-plat-title"></span>
+        <span id="rep-already-done"></span>
+      </div>
+      <div id="rep-status-bar" style="margin-bottom:10px;"></div>
+      <div id="rep-soldiers-list"></div>
+      <button class="btn bprim" style="width:100%;padding:12px;font-size:13px;margin-top:10px;" onclick="submitAllReport()">📡 שלח דיווח מלא</button>
+    </div>
+  </div>
+  <div class="card"><h3>📊 סטטוס דיווחים היום</h3><div id="report-daily-status"></div></div>
+  <div class="card"><h3>🕐 היסטוריה (60 יום)</h3><div id="report-history"></div></div>
+</div>
+
+<div class="scr" id="s-platoon">
+  <div class="card">
+    <h2>🏕️ ציוד פלוגתי</h2>
+    <div style="background:var(--sap);border-radius:var(--r);padding:12px;margin-bottom:14px;">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">
+        <div class="fg" style="flex:1;min-width:160px;"><label>שם פריט *</label><input id="peq-name" placeholder="שם הפריט"></div>
+        <div class="fg" style="min-width:90px;"><label>מק&quot;ט</label><input id="peq-mkt" placeholder="מספר סידורי"></div>
+        <div class="fg" style="min-width:65px;"><label>כמות</label><input id="peq-qty" type="number" placeholder="1" style="width:65px;"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="fg" style="min-width:150px;"><label>קטגוריה</label>
+          <select id="peq-cat" onchange="document.getElementById('peq-cat-cw').style.display=this.value==='__c__'?'flex':'none'">
+            <option value="אפסנאות">אפסנאות</option><option value="קשר">קשר</option>
+            <option value="בונקר">בונקר</option><option value="הדרכה">הדרכה</option>
+            <option value="__c__">אחר...</option>
+          </select>
+        </div>
+        <div class="fg" style="min-width:130px;display:none;" id="peq-cat-cw"><label>שם קטגוריה</label><input id="peq-cat-c" placeholder="הקלד..."></div>
+        <div class="fg" style="flex:1;min-width:130px;"><label>חתום על ידי</label><input id="peq-signed-by" placeholder="שם החותם"></div>
+        <button class="btn bprim" onclick="addPlatoonEq()">הוסף</button>
+      </div>
+    </div>
+    <div class="frow" id="peq-filters"></div>
+    <div id="platoon-eq-list"></div>
+  </div>
+</div>
+
+<div class="scr" id="s-ammo">
+  <div class="card">
+    <h2>💥 דוח תחמושת</h2>
+    <div class="frow" style="margin-bottom:14px;">
+      <button class="fb active" id="ammo-tab-n" onclick="setAmmoTab('napitz')">נפיצה</button>
+      <button class="fb" id="ammo-tab-t" onclick="setAmmoTab('tachmish')">תחמיש</button>
+    </div>
+    <div id="ammo-n"><div id="ammo-n-list"></div></div>
+    <div id="ammo-t" style="display:none;"><div id="ammo-t-list"></div></div>
+    <div style="margin-top:16px;border-top:2px solid var(--bo);padding-top:12px;">
+      <h3 style="margin-bottom:10px;">הקצאה מחלקתית</h3><div id="ammo-allocation"></div>
+    </div>
+    <div id="ammo-footer" style="margin-top:10px;font-size:11px;color:var(--kh);text-align:left;"></div>
+  </div>
+  <div class="card"><h3>היסטוריית עדכונים</h3><div id="ammo-history"></div></div>
+</div>
+</body>
+</html>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -432,7 +961,7 @@ async function initFB(){
   }catch(e){console.error(e);DB.soldiers=mergeSoldiers([]);document.getElementById('loadingScreen').style.display='none';buildDrop();}
 }
 
-function saveInv() { ); }
+
 function getSol(pid) { return DB.soldiers.find(function(s) { return s.pid === pid; }); }
 
 // ══ UI HELPERS ══
@@ -1081,17 +1610,31 @@ function printSol(pid) {
   var s = getSol(pid); if (!s) return;
   var w = window.open('', '_blank');
   var rows = Object.entries(s.nashkia || {}).map(function(e) {
-    return '<tr><td>' + e[0] + '</td><td style="font-family:monospace">' + (e[1].mkT || '—') + '</td>' +
-      '<td style="color:' + (e[1].status === 'present' ? '#27ae60' : '#c0392b') + '">' +
-      (e[1].status === 'present' ? '\u2705 \u05E7\u05D9\u05D9\u05DD' : '\u274C \u05D7\u05E1\u05E8') + '</td></tr>';
+    return '<tr><td>'+e[0]+'</td><td style="font-family:monospace">'+(e[1].mkT||'')+'</td><td style="color:'+(e[1].status==='present'?'#27ae60':'#c0392b')+'">'+( e[1].status==='present'?'OK':'X')+'</td></tr>';
   }).join('');
   var lrows = LOG_ITEMS.map(function(item) {
-    var d = (s.log || {})[item] || {val: '—', status: 'present'};
-    return '<tr><td>' + item + '</td><td>' + d.val + '</td>' +
-      '<td style="color:' + (d.status === 'present' ? '#27ae60' : '#c0392b') + '">' +
-      (d.status === 'present' ? '\u2705' : '\u274C') + '</td></tr>';
+    var d = (s.log || {})[item] || {val:'', status:'present'};
+    return '<tr><td>'+item+'</td><td>'+d.val+'</td><td style="color:'+(d.status==='present'?'#27ae60':'#c0392b')+'">'+(d.status==='present'?'OK':'X')+'</td></tr>';
   }).join('');
-  var dl = (s.deficiencies || []).map(function(d) { return '<li style="color:#c0392b">\u26A0\uFE0F ' + d + '</li>'; }).join('');
+  var dl = (s.deficiencies || []).map(function(d) { return '<li>'+d+'</li>'; }).join('');
+  var parts = [
+    '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>'+s.name+'</title>',
+    '<style>body{font-family:Arial,sans-serif;padding:18px;direction:rtl;font-size:11px}',
+    'h1{font-size:15px}h2{font-size:12px;margin:10px 0 5px}',
+    'table{width:100%;border-collapse:collapse}th{background:#2e3328;color:#e8dfc0;padding:5px;text-align:right;font-size:10px}td{padding:4px;border-bottom:1px solid #ddd}',
+    '@media print{@page{margin:10mm}}</style></head>',
+    '<body><h1>' + s.name + '</h1>',
+    '<p style="font-size:10px">' + s.pid + ' | ' + (s.role||'') + ' | ' + s.platoon + '</p>',
+    '<h2>Nashkia</h2><table><thead><tr><th>Prit</th><th>MkT</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan="3">Ein</td></tr>')+'</tbody></table>',
+    '<h2>Logisti</h2><table><thead><tr><th>Prit</th><th>Erech</th><th>Status</th></tr></thead><tbody>'+lrows+'</tbody></table>',
+    dl ? '<h2>Hosrim</h2><ul>'+dl+'</ul>' : '',
+    '<p style="font-size:9px;color:#aaa">' + new Date().toLocaleDateString() + '</p>',
+    '</body></html>'
+  ];
+  w.document.write(parts.join(''));
+  w.document.close();
+  w.onload = function() { w.print(); };
+}).join('');
   var parts = [
     '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>' + s.name + '</title>',
     '<style>body{font-family:Arial,sans-serif;padding:18px;direction:rtl;font-size:11px}',
@@ -1099,13 +1642,8 @@ function printSol(pid) {
     'table{width:100%;border-collapse:collapse;margin-bottom:12px}',
     'th{background:#2e3328;color:#e8dfc0;padding:5px 7px;text-align:right;font-size:10px}',
     'td{padding:4px 7px;border-bottom:1px solid #ddd}tr:nth-child(even)td{background:#f5f0e0}',
-    '@media print{@page{margin:10mm}}
-.nk-list-row{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--bo);transition:background .15s;}
-.nk-list-row:last-child{border-bottom:none;}
-.nk-list-row:hover{background:var(--sap);}
-.nk-list-active{background:var(--sal)!important;border-right:3px solid var(--ol);}
-@keyframes spin{to{transform:rotate(360deg)}}
-</style></head>',
+    '@media print{@page{margin:10mm}}',
+    '</style></head>',
     '<body><h1>\uD83E\uDAAE ' + s.name + '</h1>',
     '<p style="color:#666;font-size:10px">\u05DE.\u05D0.: ' + s.pid + ' | ' + (s.role || '—') + ' | \u05DE\u05D7\u05DC\u05E7\u05D4 ' + (s.platoon || '—') + '</p>',
     '<h2>\uD83D\uDD2B \u05E0\u05E9\u05E7\u05D9\u05D9\u05D4</h2>',
@@ -1116,533 +1654,6 @@ function printSol(pid) {
     '<tbody>' + lrows + '</tbody></table>',
     dl ? '<h2>\u26A0\uFE0F \u05D7\u05D5\u05E1\u05E8\u05D9\u05DD</h2><ul>' + dl + '</ul>' : '',
     '<p style="font-size:9px;color:#aaa;margin-top:14px;">\u05D4\u05D5\u05E4\u05E7: ' + new Date().toLocaleDateString('he-IL') + '</p>',
-    '
-<style>
-.rep-soldier{border:1px solid var(--bo);border-radius:var(--r);margin-bottom:9px;overflow:hidden}
-.rep-sol-hdr{background:var(--old);color:var(--sal);padding:8px 13px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
-.rep-sol-body{padding:9px 13px}
-.rep-item{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--bo)}
-.rep-item:last-child{border-bottom:none}
-.rep-item-name{flex:1;font-size:12px;font-weight:600;color:var(--old)}
-.rep-btn{padding:3px 8px;border:2px solid var(--bo);border-radius:7px;background:#fff;font-family:Heebo,sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
-.rep-btn.ok{background:#e8f4e8;border-color:var(--go);color:var(--go)}
-.rep-btn.miss{background:#fde8e6;border-color:var(--re);color:var(--re)}
-.rep-btn.warn{background:#fef3e2;border-color:var(--am);color:var(--am)}
-.rep-note{border:1px solid var(--bo);border-radius:5px;padding:3px 7px;font-size:11px;font-family:Heebo,sans-serif;width:120px;direction:rtl}
-.status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:9px;margin-bottom:9px}
-.status-card{border-radius:var(--r);padding:10px 13px;box-shadow:var(--sh)}
-.status-card.done{background:#e8f4e8;border-right:3px solid var(--go)}
-.status-card.miss{background:#fde8e6;border-right:3px solid var(--re)}
-.status-card.late{background:#fef3e2;border-right:3px solid var(--am)}
-.status-card-name{font-size:12px;font-weight:800;color:var(--old)}
-.status-card-sub{font-size:10px;color:var(--kh);margin-top:2px}
-.hist-row{padding:9px 13px;border-bottom:1px solid var(--bo);font-size:12px}
-.hist-row:last-child{border-bottom:none}
-.hist-date{font-weight:700;color:var(--old);margin-bottom:4px;display:flex;justify-content:space-between}
-.hist-item{display:flex;gap:6px;padding:2px 0;align-items:flex-start;flex-wrap:wrap}
-.hist-ok{color:var(--go)}.hist-miss{color:var(--re)}.hist-warn{color:var(--am)}
-.peq-item{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--bo);transition:background .15s}
-.peq-item:last-child{border-bottom:none}.peq-item:hover{background:var(--sap)}
-.peq-status{width:34px;height:34px;border-radius:7px;border:2px solid var(--bo);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-.peq-status.signed{background:#e8f4e8;border-color:var(--go)}
-.peq-status.cleared{background:var(--sap);border-color:var(--bo)}
-.peq-name{font-weight:700;font-size:13px;color:var(--old)}
-.peq-meta{font-size:11px;color:var(--kh);display:flex;gap:7px;flex-wrap:wrap;margin-top:2px}
-.ammo-item{display:flex;align-items:center;gap:9px;padding:9px 13px;border-bottom:1px solid var(--bo)}
-.ammo-item:last-child{border-bottom:none}
-.ammo-name{flex:1;font-size:12px;font-weight:700;color:var(--old)}
-.ammo-sub{font-size:10px;color:var(--kh);margin-top:1px}
-.ammo-qty{width:72px;padding:5px 8px;border:2px solid var(--bo);border-radius:var(--r);font-family:Heebo,sans-serif;font-size:13px;font-weight:700;text-align:center;direction:ltr}
-.ammo-qty:focus{outline:none;border-color:var(--ol)}
-.ammo-section-hdr{background:var(--old);color:var(--sal);padding:7px 13px;font-size:11px;font-weight:700;border-radius:var(--r) var(--r) 0 0;display:flex;justify-content:space-between}
-.ammo-alloc-row{display:flex;align-items:center;gap:7px;padding:6px 13px;border-bottom:1px solid var(--bo);font-size:12px}
-.ammo-alloc-plat{font-weight:700;color:var(--old);min-width:75px}
-.ammo-alloc-inp{width:55px;padding:3px 7px;border:2px solid var(--bo);border-radius:6px;font-family:Heebo,sans-serif;font-size:12px;text-align:center;direction:ltr}
-.ammo-alloc-inp:focus{outline:none;border-color:var(--ol)}
-</style>
+    '</style>
 
-<div class="scr" id="s-report">
-  <div class="card">
-    <h2>📡 ירוק בעיניים — דיווח יומי</h2>
-    <div id="rep-step1"><p style="font-size:13px;color:var(--kh);margin-bottom:14px;">בחר מחלקה לדיווח:</p><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:9px;" id="rep-plat-btns"></div></div>
-    <div id="rep-step2" style="display:none;">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap;">
-        <button class="btn bsec bsm" onclick="repBack()">← חזור</button>
-        <span style="font-size:14px;font-weight:800;color:var(--old);" id="rep-plat-title"></span>
-        <span id="rep-already-done"></span>
-      </div>
-      <div id="rep-status-bar" style="margin-bottom:10px;"></div>
-      <div id="rep-soldiers-list"></div>
-      <button class="btn bprim" style="width:100%;padding:12px;font-size:13px;margin-top:10px;" onclick="submitAllReport()">📡 שלח דיווח מלא</button>
-    </div>
-  </div>
-  <div class="card"><h3>📊 סטטוס דיווחים היום</h3><div id="report-daily-status"></div></div>
-  <div class="card"><h3>🕐 היסטוריה (60 יום)</h3><div id="report-history"></div></div>
-</div>
 
-<div class="scr" id="s-platoon">
-  <div class="card">
-    <h2>🏕️ ציוד פלוגתי</h2>
-    <div style="background:var(--sap);border-radius:var(--r);padding:12px;margin-bottom:14px;">
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">
-        <div class="fg" style="flex:1;min-width:160px;"><label>שם פריט *</label><input id="peq-name" placeholder="שם הפריט"></div>
-        <div class="fg" style="min-width:90px;"><label>מק&quot;ט</label><input id="peq-mkt" placeholder="מספר סידורי"></div>
-        <div class="fg" style="min-width:65px;"><label>כמות</label><input id="peq-qty" type="number" placeholder="1" style="width:65px;"></div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-        <div class="fg" style="min-width:150px;"><label>קטגוריה</label>
-          <select id="peq-cat" onchange="document.getElementById('peq-cat-cw').style.display=this.value==='__c__'?'flex':'none'">
-            <option value="אפסנאות">אפסנאות</option><option value="קשר">קשר</option>
-            <option value="בונקר">בונקר</option><option value="הדרכה">הדרכה</option>
-            <option value="__c__">אחר...</option>
-          </select>
-        </div>
-        <div class="fg" style="min-width:130px;display:none;" id="peq-cat-cw"><label>שם קטגוריה</label><input id="peq-cat-c" placeholder="הקלד..."></div>
-        <div class="fg" style="flex:1;min-width:130px;"><label>חתום על ידי</label><input id="peq-signed-by" placeholder="שם החותם"></div>
-        <button class="btn bprim" onclick="addPlatoonEq()">הוסף</button>
-      </div>
-    </div>
-    <div class="frow" id="peq-filters"></div>
-    <div id="platoon-eq-list"></div>
-  </div>
-</div>
-
-<div class="scr" id="s-ammo">
-  <div class="card">
-    <h2>💥 דוח תחמושת</h2>
-    <div class="frow" style="margin-bottom:14px;">
-      <button class="fb active" id="ammo-tab-n" onclick="setAmmoTab('napitz')">נפיצה</button>
-      <button class="fb" id="ammo-tab-t" onclick="setAmmoTab('tachmish')">תחמיש</button>
-    </div>
-    <div id="ammo-n"><div id="ammo-n-list"></div></div>
-    <div id="ammo-t" style="display:none;"><div id="ammo-t-list"></div></div>
-    <div style="margin-top:16px;border-top:2px solid var(--bo);padding-top:12px;">
-      <h3 style="margin-bottom:10px;">הקצאה מחלקתית</h3><div id="ammo-allocation"></div>
-    </div>
-    <div id="ammo-footer" style="margin-top:10px;font-size:11px;color:var(--kh);text-align:left;"></div>
-  </div>
-  <div class="card"><h3>היסטוריית עדכונים</h3><div id="ammo-history"></div></div>
-</div>
-</body></html>'
-  ];
-  w.document.write(parts.join(''));
-  w.document.close();
-  w.onload = function() { w.print(); };
-}
-
-onAuthStateChanged(auth,function(user){
-  if(user){var ek=user.email.toLowerCase();
-    if(ALLOWED_EMAILS.indexOf(ek)<0){signOut(auth);document.getElementById('loadingMsg').textContent='אין הרשאה: '+user.email;document.getElementById('loginBtn').style.display='flex';document.getElementById('loadingSpinner').style.display='none';return;}
-    currentUser=USER_ROLES[ek]||{name:user.email,platoon:'all',canReport:true,viewAll:true};currentUser.email=ek;
-    var un=document.getElementById('userNameEl');if(un)un.textContent=currentUser.name;
-    var so=document.getElementById('signOutBtn');if(so)so.style.display='block';
-    setLabels();initFB();
-  }else{document.getElementById('loadingSpinner').style.display='none';document.getElementById('loadingMsg').textContent='נדרשת כניסה';document.getElementById('loginBtn').style.display='flex';}
-});
-document.getElementById('loginBtn').addEventListener('click',function(){
-  document.getElementById('loadingSpinner').style.display='block';document.getElementById('loginErr').style.display='none';
-  signInWithPopup(auth,provider).catch(function(e){document.getElementById('loadingSpinner').style.display='none';document.getElementById('loginErr').textContent=e.message;document.getElementById('loginErr').style.display='block';document.getElementById('loginBtn').style.display='flex';});
-});
-window.doSignOut=function(){if(confirm('להתנתק?'))signOut(auth);};
-window.resetDB=function(){if(!confirm('אפס DB?'))return;DB.soldiers=SOLDIERS.map(function(s){return{pid:s.pid,name:s.name,platoon:s.platoon,role:s.role||'',phone:s.phone||'',nashkia:s.nashkia||{},log:s.log||{},deficiencies:[],extra_items:[]};});DB.deleted=[];DB.reports={};INV={actual:{},takan:{},edited:{},log:[],platoonEq:[],ammo:{},ammoHistory:[]};saveDB();saveInv();saveReports();buildDrop();alert('DB אופס');};
-
-// ── REPORT ──
-var DEADLINE=18; var repSelPlat=null;
-function getTodayKey(){var d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0')+'-'+d.getDate().toString().padStart(2,'0');}
-function isPastDeadline(){return new Date().getHours()>=DEADLINE;}
-function renderReport(){
-  var today=getTodayKey();renderDailyStatus(today);renderReportHistory();
-  var bw=document.getElementById('rep-plat-btns');bw.innerHTML='';
-  var todayReps=(DB.reports||{})[today]||{};
-  ['1','2','3','מפלג'].forEach(function(p){
-    var done=todayReps[p]&&todayReps[p].completed;
-    var solCount=DB.soldiers.filter(function(s){return s.platoon===p&&Object.keys(s.nashkia||{}).length>0;}).length;
-    var btn=document.createElement('div');
-    btn.style.cssText='border:2px solid '+(done?'var(--go)':'var(--bo)')+';border-radius:12px;padding:14px;cursor:pointer;text-align:center;background:'+(done?'#e8f4e8':'var(--wh)')+';transition:all .2s;';
-    btn.innerHTML='<div style="font-size:17px;font-weight:900;color:var(--old);">'+p+'</div><div style="font-size:11px;color:var(--kh);margin-top:3px;">'+solCount+' חיילים</div><div style="font-size:11px;margin-top:5px;font-weight:600;color:'+(done?'var(--go)':'var(--re)')+';">'+(done?'דווח ב-'+todayReps[p].time:(isPastDeadline()?'לא דווח':'ממתין'))+'</div>';
-    btn.onclick=(function(pl){return function(){openRepPlat(pl);};})(p);
-    bw.appendChild(btn);
-  });
-  document.getElementById('rep-step1').style.display='block';
-  document.getElementById('rep-step2').style.display='none';
-}
-function openRepPlat(plat){
-  repSelPlat=plat;var today=getTodayKey();
-  document.getElementById('rep-step1').style.display='none';
-  document.getElementById('rep-step2').style.display='block';
-  document.getElementById('rep-plat-title').textContent='מחלקה '+plat;
-  var todayRep=((DB.reports||{})[today]||{})[plat];
-  var doneEl=document.getElementById('rep-already-done');
-  if(todayRep&&todayRep.completed){doneEl.style.cssText='background:#e8f4e8;color:var(--go);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;';doneEl.textContent='דווח ע"י '+todayRep.reporter+' ב-'+todayRep.time;}
-  else doneEl.style.cssText='';
-  var sb=document.getElementById('rep-status-bar');sb.innerHTML='';
-  var past=isPastDeadline();
-  var bar=document.createElement('div');bar.style.cssText='padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;background:'+(past?'#fde8e6':'#e8f4e8')+';color:'+(past?'var(--re)':'var(--go)');
-  bar.textContent=past?'עבר הדד-ליין (18:00)':'דד-ליין: 18:00';sb.appendChild(bar);
-  var soldiers=DB.soldiers.filter(function(s){return s.platoon===plat&&Object.keys(s.nashkia||{}).length>0;}).sort(function(a,b){return a.name.localeCompare(b.name,'he');});
-  var list=document.getElementById('rep-soldiers-list');list.innerHTML='';
-  if(!soldiers.length){list.innerHTML='<div class="nd">אין חיילים עם נשקייה</div>';return;}
-  soldiers.forEach(function(s){
-    var prevData=todayRep?(todayRep.soldiers||{})[s.pid]:null;
-    var wrap=mk('div',{cls:'rep-soldier'});
-    var hdr=mk('div',{cls:'rep-sol-hdr'});
-    hdr.appendChild(mk('span',{txt:s.name+(s.role?' - '+s.role:'')}));
-    var gRow=mk('div',{style:'display:flex;align-items:center;gap:5px;'});
-    gRow.appendChild(mk('span',{style:'font-size:11px;color:var(--sal);',txt:'רימונים:'}));
-    var gInp=mk('input',{type:'number',style:'width:45px;padding:2px 5px;border-radius:5px;border:none;font-size:12px;font-family:Heebo,sans-serif;text-align:center;',placeholder:'0'});
-    gInp.id='gren_'+s.pid;if(prevData)gInp.value=String(prevData.grenades||'');
-    gRow.appendChild(gInp);gRow.appendChild(mk('span',{style:'font-size:10px;color:rgba(255,255,255,.6);',txt:'/2'}));
-    hdr.appendChild(gRow);wrap.appendChild(hdr);
-    var body=mk('div',{cls:'rep-sol-body'});
-    Object.keys(s.nashkia||{}).sort().forEach(function(item){
-      var prevItem=prevData?(prevData.items||{})[item]:null;
-      var row=mk('div',{cls:'rep-item'});
-      row.appendChild(mk('span',{cls:'rep-item-name',txt:item}));
-      var bg=mk('div',{style:'display:flex;gap:4px;'});
-      ['ok','miss','warn'].forEach(function(st){
-        var lbl=st==='ok'?'קיים':st==='miss'?'חסר':'לא תקין';
-        var b=mk('button',{cls:'rep-btn'+(prevItem&&prevItem.status===st?' '+st:''),txt:lbl});
-        b.id='rb_'+s.pid+'__'+encodeURIComponent(item)+'__'+st;
-        b.addEventListener('click',(function(pid,it,status,btn){return function(){['ok','miss','warn'].forEach(function(x){var sib=document.getElementById('rb_'+pid+'__'+encodeURIComponent(it)+'__'+x);if(sib)sib.className='rep-btn';});btn.className='rep-btn '+status;};})(s.pid,item,st,b));
-        bg.appendChild(b);
-      });
-      row.appendChild(bg);
-      var note=mk('input',{cls:'rep-note',placeholder:'הערה...'});
-      note.id='rn_'+s.pid+'__'+encodeURIComponent(item);
-      if(prevItem&&prevItem.note)note.value=prevItem.note;
-      row.appendChild(note);body.appendChild(row);
-    });
-    wrap.appendChild(body);list.appendChild(wrap);
-  });
-}
-function repBack(){document.getElementById('rep-step1').style.display='block';document.getElementById('rep-step2').style.display='none';repSelPlat=null;}
-window.repBack=repBack;
-function getRepStatus(pid,item){for(var st of['ok','miss','warn']){var b=document.getElementById('rb_'+pid+'__'+encodeURIComponent(item)+'__'+st);if(b&&b.classList.contains(st))return st;}return'ok';}
-function getRepNote(pid,item){var inp=document.getElementById('rn_'+pid+'__'+encodeURIComponent(item));return inp?(inp.value||'').trim():'';}
-function getGren(pid){var inp=document.getElementById('gren_'+pid);return inp?parseInt(inp.value||'0')||0:0;}
-function submitAllReport(){
-  if(!repSelPlat)return;var today=getTodayKey();
-  var soldiers=DB.soldiers.filter(function(s){return s.platoon===repSelPlat&&Object.keys(s.nashkia||{}).length>0;});
-  var soldierData={};
-  soldiers.forEach(function(s){var items={};Object.keys(s.nashkia||{}).forEach(function(item){items[item]={status:getRepStatus(s.pid,item),note:getRepNote(s.pid,item)};});soldierData[s.pid]={items:items,grenades:getGren(s.pid)};});
-  DB.reports=DB.reports||{};DB.reports[today]=DB.reports[today]||{};
-  DB.reports[today][repSelPlat]={soldiers:soldierData,reporter:currentUser?currentUser.name:'',time:new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}),platoon:repSelPlat,completed:true};
-  saveReports();toast('דיווח נשמר - מחלקה '+repSelPlat);repBack();renderReport();
-}
-window.submitAllReport=submitAllReport;
-function renderDailyStatus(today){
-  var el2=document.getElementById('report-daily-status');el2.innerHTML='';
-  var todayReps=(DB.reports||{})[today]||{};var past=isPastDeadline();var doneCount=0;
-  var RPLATS=['1','2','3','מפלג'];
-  var grid=mk('div',{cls:'status-grid'});
-  RPLATS.forEach(function(p){var rep=todayReps[p];var done=rep&&rep.completed;if(done)doneCount++;
-    var card=mk('div',{cls:'status-card '+(done?'done':past?'late':'miss')});
-    card.appendChild(mk('div',{cls:'status-card-name',txt:'מחלקה '+p}));
-    card.appendChild(mk('div',{cls:'status-card-sub',txt:done?rep.reporter+' '+rep.time:past?'לא דווח':'ממתין'}));
-    grid.appendChild(card);
-  });
-  if(doneCount===RPLATS.length)el2.appendChild(mk('div',{style:'background:var(--go);color:#fff;border-radius:var(--r);padding:10px 14px;font-size:13px;font-weight:800;margin-bottom:9px;text-align:center;',txt:'כל המחלקות דיווחו ירוק בעיניים!'}));
-  else if(past){var missing=RPLATS.filter(function(p){return!(todayReps[p]&&todayReps[p].completed);});el2.appendChild(mk('div',{style:'background:var(--re);color:#fff;border-radius:var(--r);padding:9px 13px;font-size:12px;font-weight:700;margin-bottom:9px;',txt:'לא דיווחו: '+missing.join(', ')}));}
-  el2.appendChild(grid);
-}
-function renderReportHistory(){
-  var el2=document.getElementById('report-history');el2.innerHTML='';
-  var reports=DB.reports||{};var dates=Object.keys(reports).sort().reverse().slice(0,60);
-  if(!dates.length){el2.innerHTML='<div class="nd">אין היסטוריה</div>';return;}
-  var RPLATS=['1','2','3','מפלג'];
-  dates.forEach(function(date){
-    var dayReps=reports[date];var allDone=RPLATS.every(function(p){return dayReps[p]&&dayReps[p].completed;});
-    var wrap=mk('div',{cls:'hist-row'});
-    var dHdr=mk('div',{cls:'hist-date'});dHdr.appendChild(mk('span',{txt:date}));dHdr.appendChild(mk('span',{style:'color:'+(allDone?'var(--go)':'var(--re)'),txt:allDone?'הכל':'חסר'}));wrap.appendChild(dHdr);
-    RPLATS.forEach(function(p){var rep=dayReps[p];var row=mk('div',{cls:'hist-item'});
-      if(!rep){row.appendChild(mk('span',{cls:'hist-miss',txt:'מח'+p+' - לא דווח'}));}
-      else{var ok=0,miss=0,warn=0;
-        Object.values(rep.soldiers||{}).forEach(function(sol){Object.values(sol.items||{}).forEach(function(it){if(it.status==='ok')ok++;else if(it.status==='miss')miss++;else warn++;});});
-        var parts=['מח'+p+' | '+rep.reporter+' '+rep.time];if(miss>0)parts.push(miss+' חסר');if(warn>0)parts.push(warn+' לא תקין');
-        row.appendChild(mk('span',{cls:miss>0||warn>0?'hist-warn':'hist-ok',txt:parts.join(' | ')}));
-        var issues=[];
-        Object.entries(rep.soldiers||{}).forEach(function(se){var sol=DB.soldiers.find(function(x){return x.pid===se[0];});
-          Object.entries(se[1].items||{}).forEach(function(ie){if(ie[1].status!=='ok')issues.push((sol?sol.name:se[0])+': '+ie[0]+' - '+(ie[1].status==='miss'?'חסר':'לא תקין')+(ie[1].note?' ('+ie[1].note+')':''));});
-          if(se[1].grenades!==undefined&&se[1].grenades<2)issues.push((sol?sol.name:se[0])+': רימונים '+se[1].grenades+'/2');
-        });
-        if(issues.length){var iw=mk('div',{style:'margin-top:2px;padding-right:10px;'});issues.forEach(function(iss){iw.appendChild(mk('div',{style:'font-size:10px;color:var(--re);',txt:'- '+iss}));});row.appendChild(iw);}
-      }
-      wrap.appendChild(row);
-    });
-    el2.appendChild(wrap);
-  });
-}
-
-// ── PLATOON EQ ──
-var platFlt='all';
-function addPlatoonEq(){
-  var name=(document.getElementById('peq-name').value||'').trim();if(!name){toast('הכנס שם פריט');return;}
-  var catSel=document.getElementById('peq-cat').value;
-  var cat=catSel==='__c__'?(document.getElementById('peq-cat-c').value||'').trim()||'כללי':catSel;
-  INV.platoonEq=INV.platoonEq||[];
-  INV.platoonEq.push({id:Date.now().toString(),name:name,mkt:(document.getElementById('peq-mkt').value||'').trim(),qty:parseInt(document.getElementById('peq-qty').value||'1')||1,cat:cat,signedBy:(document.getElementById('peq-signed-by').value||'').trim(),status:'signed'});
-  saveInv();['peq-name','peq-mkt','peq-qty','peq-signed-by'].forEach(function(id){document.getElementById(id).value='';});
-  renderPlatoonEq();toast(name+' נוסף');
-}
-window.addPlatoonEq=addPlatoonEq;
-function renderPlatoonEq(){
-  var items=INV.platoonEq||[];
-  var cats=['all','אפסנאות','קשר','בונקר','הדרכה'];
-  items.forEach(function(x){if(cats.indexOf(x.cat)<0)cats.push(x.cat);});
-  var fe=document.getElementById('peq-filters');fe.innerHTML='';
-  cats.forEach(function(c){fe.appendChild(mk('button',{cls:'fb'+(platFlt===c?' active':''),txt:(c==='all'?'הכל':c)+' ('+( c==='all'?items.length:items.filter(function(x){return x.cat===c;}).length)+')',onclick:(function(cat){return function(){platFlt=cat;renderPlatoonEq();};})(c)}));});
-  var filtered=platFlt==='all'?items:items.filter(function(x){return x.cat===platFlt;});
-  var el2=document.getElementById('platoon-eq-list');el2.innerHTML='';
-  if(!filtered.length){el2.innerHTML='<div class="nd">אין פריטים</div>';return;}
-  var bycat={};filtered.forEach(function(item){if(!bycat[item.cat])bycat[item.cat]=[];bycat[item.cat].push(item);});
-  Object.keys(bycat).sort().forEach(function(cat){
-    var catItems=bycat[cat];var signed=catItems.filter(function(x){return x.status==='signed';}).length;
-    var hdr=mk('div',{style:'background:var(--old);color:var(--sal);padding:6px 13px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;margin-top:9px;border-radius:8px 8px 0 0;'});
-    hdr.appendChild(mk('span',{txt:cat}));hdr.appendChild(mk('span',{txt:signed+'/'+catItems.length+' חתום'}));el2.appendChild(hdr);
-    var wrap=mk('div',{style:'border:1px solid var(--bo);border-radius:0 0 8px 8px;overflow:hidden;margin-bottom:3px;'});
-    catItems.forEach(function(item){
-      var row=mk('div',{cls:'peq-item'});
-      var stBtn=mk('div',{cls:'peq-status '+(item.status==='signed'?'signed':'cleared'),txt:item.status==='signed'?'V':'',style:'font-size:14px;font-weight:900;color:var(--go);',onclick:function(){item.status=item.status==='signed'?'cleared':'signed';saveInv();renderPlatoonEq();}});
-      var info=mk('div',{style:'flex:1;'});
-      info.appendChild(mk('div',{cls:'peq-name',txt:item.name+(item.qty>1?' x'+item.qty:'')}));
-      var meta=mk('div',{cls:'peq-meta'});if(item.mkt)meta.appendChild(mk('span',{txt:'מקט: '+item.mkt}));if(item.signedBy)meta.appendChild(mk('span',{style:'color:var(--ol);font-weight:600;',txt:'חתם: '+item.signedBy}));info.appendChild(meta);
-      var delBtn=mk('button',{cls:'btn bred bsm',txt:'מחק',style:'opacity:0;',onclick:(function(id){return function(){if(!confirm('מחק?'))return;INV.platoonEq=INV.platoonEq.filter(function(x){return x.id!==id;});saveInv();renderPlatoonEq();};})(item.id)});
-      row.addEventListener('mouseover',function(){delBtn.style.opacity='1';});
-      row.addEventListener('mouseout',function(){delBtn.style.opacity='0';});
-      row.appendChild(stBtn);row.appendChild(info);row.appendChild(delBtn);wrap.appendChild(row);
-    });
-    el2.appendChild(wrap);
-  });
-}
-
-// ── AMMO ──
-var AMMO={napitz:[{id:'lau',name:'לאו',unit:'יח'},{id:'metador',name:'מטאדור',unit:'יח'},{id:'rimon_ras',name:'רסס',unit:'יח'},{id:'rimon_shan',name:'עשן',unit:'יח'},{id:'matul_naf',name:'מטול נפיץ',unit:'יח'},{id:'matul_shan',name:'מטול עשן',unit:'יח'},{id:'matul_tor',name:'מטול תאורה',unit:'יח'}],tachmish:[{id:'am556',name:'5.56',unit:'כדורים'},{id:'am762',name:'7.62',unit:'כדורים'},{id:'am_mag',name:'מאג',unit:'כדורים'},{id:'am_mkk',name:'מקק',unit:'כדורים'},{id:'am_tzel',name:'צלפים',unit:'כדורים'},{id:'am_maklr',name:'מקלר',unit:'מחסניות'}]};
-var ammoTab='napitz';
-function setAmmoTab(tab){ammoTab=tab;document.getElementById('ammo-n').style.display=tab==='napitz'?'block':'none';document.getElementById('ammo-t').style.display=tab==='tachmish'?'block':'none';document.getElementById('ammo-tab-n').className='fb'+(tab==='napitz'?' active':'');document.getElementById('ammo-tab-t').className='fb'+(tab==='tachmish'?' active':'');}
-window.setAmmoTab=setAmmoTab;
-function renderAmmo(){
-  var ammoData=INV.ammo||{};
-  var cats={napitz:AMMO.napitz,tachmish:AMMO.tachmish};
-  Object.keys(cats).forEach(function(cat){
-    var cId=cat==='napitz'?'ammo-n-list':'ammo-t-list';var container=document.getElementById(cId);container.innerHTML='';
-    var wrap=mk('div',{style:'border:1px solid var(--bo);border-radius:8px;overflow:hidden;margin-bottom:7px;'});
-    var hdr=mk('div',{cls:'ammo-section-hdr'});hdr.appendChild(mk('span',{txt:cat==='napitz'?'נפיצה':'תחמיש'}));hdr.appendChild(mk('span',{style:'font-size:10px;opacity:.7;',txt:'בפועל | תקן | עודף/חסר'}));wrap.appendChild(hdr);
-    cats[cat].forEach(function(item){
-      var val=ammoData[item.id]||{qty:0,takan:0};var row=mk('div',{cls:'ammo-item'});
-      var info=mk('div',{style:'flex:1;'});info.appendChild(mk('div',{cls:'ammo-name',txt:item.name}));info.appendChild(mk('div',{cls:'ammo-sub',txt:item.unit}));row.appendChild(info);
-      var tInp=mk('input',{type:'number',style:'width:62px;padding:4px 7px;border:1px dashed var(--bo);border-radius:6px;font-family:Heebo,sans-serif;font-size:11px;text-align:center;direction:ltr;',placeholder:'תקן'});
-      tInp.value=val.takan||'';tInp.addEventListener('change',(function(id){return function(){var d=INV.ammo=INV.ammo||{};d[id]=d[id]||{qty:0,takan:0,allocation:{}};d[id].takan=parseInt(this.value)||0;saveInv();renderAmmo();};})(item.id));row.appendChild(tInp);
-      var qInp=mk('input',{cls:'ammo-qty',type:'number',placeholder:'0'});qInp.value=val.qty||'';
-      qInp.addEventListener('change',(function(id){return function(){var d=INV.ammo=INV.ammo||{};d[id]=d[id]||{qty:0,takan:0,allocation:{}};d[id].qty=parseInt(this.value)||0;INV.ammoHistory=INV.ammoHistory||[];INV.ammoHistory.push({id:id,qty:d[id].qty,date:new Date().toLocaleDateString('he-IL'),time:new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}),reporter:currentUser?currentUser.name:''});if(INV.ammoHistory.length>200)INV.ammoHistory=INV.ammoHistory.slice(-200);saveInv();renderAmmo();};})(item.id));row.appendChild(qInp);
-      var delta=(val.qty||0)-(val.takan||0);row.appendChild(mk('span',{cls:delta>0?'delta-pos':delta<0?'delta-neg':'delta-zero',txt:val.takan?(delta>0?'+':'')+delta:'--'}));
-      wrap.appendChild(row);
-    });
-    container.appendChild(wrap);
-  });
-  renderAmmoAllocation();
-  var f=document.getElementById('ammo-footer');var last=null;if(INV.ammoHistory&&INV.ammoHistory.length){var l=INV.ammoHistory[INV.ammoHistory.length-1];last='עדכון אחרון: '+l.date+' '+l.time+(l.reporter?' - '+l.reporter:'');}f.textContent=last||'';
-  renderAmmoHistory();
-}
-function renderAmmoAllocation(){
-  var el2=document.getElementById('ammo-allocation');el2.innerHTML='';var ammoData=INV.ammo||{};
-  var allItems=AMMO.napitz.concat(AMMO.tachmish);
-  var hasAny=allItems.some(function(item){return(ammoData[item.id]||{}).qty>0;});
-  if(!hasAny){el2.innerHTML='<div class="nd">הכנס כמויות למעלה להקצאה</div>';return;}
-  var RPLATS=['1','2','3','מפלג'];
-  allItems.forEach(function(item){
-    var val=ammoData[item.id]||{qty:0,takan:0,allocation:{}};if(!val.qty)return;
-    var section=mk('div',{style:'margin-bottom:12px;'});
-    var hdr=mk('div',{style:'font-size:12px;font-weight:800;color:var(--old);margin-bottom:5px;display:flex;justify-content:space-between;'});
-    hdr.appendChild(mk('span',{txt:item.name}));
-    var allocated=Object.values(val.allocation||{}).reduce(function(a,b){return a+(parseInt(b)||0);},0);var remaining=(val.qty||0)-allocated;
-    hdr.appendChild(mk('span',{style:'font-size:11px;font-weight:600;color:'+(remaining<0?'var(--re)':remaining>0?'var(--am)':'var(--go)'),txt:'שוייץ: '+allocated+'/'+val.qty+' | נותר: '+remaining}));
-    section.appendChild(hdr);
-    var wrap=mk('div',{style:'border:1px solid var(--bo);border-radius:8px;overflow:hidden;'});
-    RPLATS.forEach(function(p){
-      var row=mk('div',{cls:'ammo-alloc-row'});row.appendChild(mk('span',{cls:'ammo-alloc-plat',txt:'מחלקה '+p}));
-      var inp=mk('input',{cls:'ammo-alloc-inp',type:'number',placeholder:'0'});inp.value=(val.allocation||{})[p]||'';
-      inp.addEventListener('change',(function(id,plat){return function(){var d=INV.ammo=INV.ammo||{};d[id]=d[id]||{qty:0,takan:0,allocation:{}};d[id].allocation=d[id].allocation||{};d[id].allocation[plat]=parseInt(this.value)||0;saveInv();renderAmmoAllocation();};})(item.id,p));
-      row.appendChild(inp);row.appendChild(mk('span',{style:'font-size:11px;color:var(--kh);',txt:item.unit}));wrap.appendChild(row);
-    });
-    section.appendChild(wrap);el2.appendChild(section);
-  });
-}
-function renderAmmoHistory(){
-  var el2=document.getElementById('ammo-history');el2.innerHTML='';
-  var hist=(INV.ammoHistory||[]).slice().reverse().slice(0,50);
-  if(!hist.length){el2.innerHTML='<div class="nd">אין היסטוריה</div>';return;}
-  var allItems=AMMO.napitz.concat(AMMO.tachmish);var byDate={};
-  hist.forEach(function(h){if(!byDate[h.date])byDate[h.date]=[];byDate[h.date].push(h);});
-  Object.keys(byDate).sort().reverse().forEach(function(date){
-    var wrap=mk('div',{cls:'hist-row'});wrap.appendChild(mk('div',{cls:'hist-date',txt:date}));
-    byDate[date].forEach(function(h){
-      var itemName=(allItems.find(function(x){return x.id===h.id;})||{name:h.id}).name;
-      var row=mk('div',{cls:'hist-item'});
-      row.appendChild(mk('span',{txt:h.time+' | '+itemName+': ',style:'color:var(--ol);font-weight:600;'}));
-      row.appendChild(mk('span',{txt:h.qty+(h.reporter?' - '+h.reporter:''),style:'color:var(--dk);'}));
-      wrap.appendChild(row);
-    });
-    el2.appendChild(wrap);
-  });
-}
-
-// ── BULK UPLOAD ──
-function downloadTemplate(){
-  if(typeof XLSX==='undefined'){toast('ספריית Excel לא נטענה');return;}
-  var wb=XLSX.utils.book_new();
-  var ws=XLSX.utils.aoa_to_sheet([['שם','מספר אישי','מחלקה','תפקיד','טלפון'],['ישראל ישראלי','1234567','1','לוחם','050-0000000'],['משה כהן','2345678','2','קלע',''],['','','1/2/3/מפלג','','']]);
-  ws['!cols']=[{wch:20},{wch:14},{wch:10},{wch:12},{wch:16}];
-  XLSX.utils.book_append_sheet(wb,ws,'חיילים');XLSX.writeFile(wb,'template_chayalim.xlsx');
-}
-window.downloadTemplate=downloadTemplate;
-function handleFileUpload(input){
-  var file=input.files[0];if(!file)return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    try{
-      var data=new Uint8Array(e.target.result);var wb=XLSX.read(data,{type:'array'});
-      var ws=wb.Sheets[wb.SheetNames[0]];var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-      if(rows.length<2){toast('הקובץ ריק');return;}
-      var hRow=0;
-      for(var i=0;i<Math.min(5,rows.length);i++){var r=rows[i].map(function(c){return String(c).trim();});if(r.some(function(c){return c.indexOf('שם')>=0||c.indexOf('מספר')>=0;})){hRow=i;break;}}
-      var headers=rows[hRow].map(function(c){return String(c).trim();});
-      var cm={name:-1,pid:-1,platoon:-1,role:-1,phone:-1};
-      headers.forEach(function(h,i){if(h.indexOf('שם')>=0&&cm.name<0)cm.name=i;else if(h.indexOf('מספר')>=0)cm.pid=i;else if(h.indexOf('מחלקה')>=0||h.indexOf('מח')>=0)cm.platoon=i;else if(h.indexOf('תפקיד')>=0)cm.role=i;else if(h.indexOf('טלפון')>=0||h.indexOf('פלאפון')>=0)cm.phone=i;});
-      if(cm.name<0||cm.pid<0){toast('לא נמצאו עמודות שם ומספר אישי');return;}
-      var toAdd=[],already=[];
-      for(var r2=hRow+1;r2<rows.length;r2++){
-        var row=rows[r2];var name=String(row[cm.name]||'').trim();var pid=String(row[cm.pid]||'').trim().replace(/\.0$/,'');
-        if(!name||!pid)continue;
-        if(DB.soldiers.find(function(s){return s.pid===pid;})){already.push(name);continue;}
-        var platoon=cm.platoon>=0?String(row[cm.platoon]||'1').trim().replace(/\.0$/,''):'1';
-        if(['1','2','3','מפלג'].indexOf(platoon)<0)platoon='1';
-        toAdd.push({pid:pid,name:name,platoon:platoon,role:cm.role>=0?String(row[cm.role]||'').trim():'לוחם',phone:cm.phone>=0?String(row[cm.phone]||'').trim():'',nashkia:{},log:{},deficiencies:[],extra_items:[]});
-      }
-      var prev=document.getElementById('upload-preview');prev.innerHTML='';
-      if(!toAdd.length){prev.innerHTML='<div class="nd">אין חיילים חדשים'+(already.length?' ('+already.length+' קיימים)':'')+'</div>';return;}
-      var info=document.createElement('div');info.style.cssText='background:var(--sap);border-radius:8px;padding:12px;margin-top:12px;';
-      info.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--old);margin-bottom:8px;">'+toAdd.length+' חיילים לייבוא'+(already.length?' | '+already.length+' כבר קיימים':'')+'</div>';
-      var importBtn=document.createElement('button');importBtn.className='btn bprim';importBtn.textContent='ייבא '+toAdd.length+' חיילים';
-      importBtn.onclick=function(){toAdd.forEach(function(s){DB.soldiers.push(s);});saveDB();buildDrop();toast('יובאו '+toAdd.length+' חיילים');prev.innerHTML='';document.getElementById('file-input').value='';};
-      info.appendChild(importBtn);prev.appendChild(info);
-    }catch(err){toast('שגיאה: '+err.message);}
-  };
-  reader.readAsArrayBuffer(file);
-}
-window.handleFileUpload=handleFileUpload;
-(function(){
-  var uz=document.getElementById('upload-zone');if(!uz)return;
-  uz.addEventListener('dragover',function(e){e.preventDefault();uz.style.borderColor='var(--ol)';});
-  uz.addEventListener('dragleave',function(){uz.style.borderColor='var(--bo)';});
-  uz.addEventListener('drop',function(e){e.preventDefault();uz.style.borderColor='var(--bo)';var f=e.dataTransfer.files[0];if(f){var inp=document.getElementById('file-input');var dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;handleFileUpload(inp);}});
-})();
-</script>
-
-<style>
-.rep-soldier{border:1px solid var(--bo);border-radius:var(--r);margin-bottom:9px;overflow:hidden}
-.rep-sol-hdr{background:var(--old);color:var(--sal);padding:8px 13px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
-.rep-sol-body{padding:9px 13px}
-.rep-item{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--bo)}
-.rep-item:last-child{border-bottom:none}
-.rep-item-name{flex:1;font-size:12px;font-weight:600;color:var(--old)}
-.rep-btn{padding:3px 8px;border:2px solid var(--bo);border-radius:7px;background:#fff;font-family:Heebo,sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
-.rep-btn.ok{background:#e8f4e8;border-color:var(--go);color:var(--go)}
-.rep-btn.miss{background:#fde8e6;border-color:var(--re);color:var(--re)}
-.rep-btn.warn{background:#fef3e2;border-color:var(--am);color:var(--am)}
-.rep-note{border:1px solid var(--bo);border-radius:5px;padding:3px 7px;font-size:11px;font-family:Heebo,sans-serif;width:120px;direction:rtl}
-.status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:9px;margin-bottom:9px}
-.status-card{border-radius:var(--r);padding:10px 13px;box-shadow:var(--sh)}
-.status-card.done{background:#e8f4e8;border-right:3px solid var(--go)}
-.status-card.miss{background:#fde8e6;border-right:3px solid var(--re)}
-.status-card.late{background:#fef3e2;border-right:3px solid var(--am)}
-.status-card-name{font-size:12px;font-weight:800;color:var(--old)}
-.status-card-sub{font-size:10px;color:var(--kh);margin-top:2px}
-.hist-row{padding:9px 13px;border-bottom:1px solid var(--bo);font-size:12px}
-.hist-row:last-child{border-bottom:none}
-.hist-date{font-weight:700;color:var(--old);margin-bottom:4px;display:flex;justify-content:space-between}
-.hist-item{display:flex;gap:6px;padding:2px 0;align-items:flex-start;flex-wrap:wrap}
-.hist-ok{color:var(--go)}.hist-miss{color:var(--re)}.hist-warn{color:var(--am)}
-.peq-item{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--bo);transition:background .15s}
-.peq-item:last-child{border-bottom:none}.peq-item:hover{background:var(--sap)}
-.peq-status{width:34px;height:34px;border-radius:7px;border:2px solid var(--bo);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-.peq-status.signed{background:#e8f4e8;border-color:var(--go)}
-.peq-status.cleared{background:var(--sap);border-color:var(--bo)}
-.peq-name{font-weight:700;font-size:13px;color:var(--old)}
-.peq-meta{font-size:11px;color:var(--kh);display:flex;gap:7px;flex-wrap:wrap;margin-top:2px}
-.ammo-item{display:flex;align-items:center;gap:9px;padding:9px 13px;border-bottom:1px solid var(--bo)}
-.ammo-item:last-child{border-bottom:none}
-.ammo-name{flex:1;font-size:12px;font-weight:700;color:var(--old)}
-.ammo-sub{font-size:10px;color:var(--kh);margin-top:1px}
-.ammo-qty{width:72px;padding:5px 8px;border:2px solid var(--bo);border-radius:var(--r);font-family:Heebo,sans-serif;font-size:13px;font-weight:700;text-align:center;direction:ltr}
-.ammo-qty:focus{outline:none;border-color:var(--ol)}
-.ammo-section-hdr{background:var(--old);color:var(--sal);padding:7px 13px;font-size:11px;font-weight:700;border-radius:var(--r) var(--r) 0 0;display:flex;justify-content:space-between}
-.ammo-alloc-row{display:flex;align-items:center;gap:7px;padding:6px 13px;border-bottom:1px solid var(--bo);font-size:12px}
-.ammo-alloc-plat{font-weight:700;color:var(--old);min-width:75px}
-.ammo-alloc-inp{width:55px;padding:3px 7px;border:2px solid var(--bo);border-radius:6px;font-family:Heebo,sans-serif;font-size:12px;text-align:center;direction:ltr}
-.ammo-alloc-inp:focus{outline:none;border-color:var(--ol)}
-</style>
-
-<div class="scr" id="s-report">
-  <div class="card">
-    <h2>📡 ירוק בעיניים — דיווח יומי</h2>
-    <div id="rep-step1"><p style="font-size:13px;color:var(--kh);margin-bottom:14px;">בחר מחלקה לדיווח:</p><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:9px;" id="rep-plat-btns"></div></div>
-    <div id="rep-step2" style="display:none;">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap;">
-        <button class="btn bsec bsm" onclick="repBack()">← חזור</button>
-        <span style="font-size:14px;font-weight:800;color:var(--old);" id="rep-plat-title"></span>
-        <span id="rep-already-done"></span>
-      </div>
-      <div id="rep-status-bar" style="margin-bottom:10px;"></div>
-      <div id="rep-soldiers-list"></div>
-      <button class="btn bprim" style="width:100%;padding:12px;font-size:13px;margin-top:10px;" onclick="submitAllReport()">📡 שלח דיווח מלא</button>
-    </div>
-  </div>
-  <div class="card"><h3>📊 סטטוס דיווחים היום</h3><div id="report-daily-status"></div></div>
-  <div class="card"><h3>🕐 היסטוריה (60 יום)</h3><div id="report-history"></div></div>
-</div>
-
-<div class="scr" id="s-platoon">
-  <div class="card">
-    <h2>🏕️ ציוד פלוגתי</h2>
-    <div style="background:var(--sap);border-radius:var(--r);padding:12px;margin-bottom:14px;">
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">
-        <div class="fg" style="flex:1;min-width:160px;"><label>שם פריט *</label><input id="peq-name" placeholder="שם הפריט"></div>
-        <div class="fg" style="min-width:90px;"><label>מק&quot;ט</label><input id="peq-mkt" placeholder="מספר סידורי"></div>
-        <div class="fg" style="min-width:65px;"><label>כמות</label><input id="peq-qty" type="number" placeholder="1" style="width:65px;"></div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-        <div class="fg" style="min-width:150px;"><label>קטגוריה</label>
-          <select id="peq-cat" onchange="document.getElementById('peq-cat-cw').style.display=this.value==='__c__'?'flex':'none'">
-            <option value="אפסנאות">אפסנאות</option><option value="קשר">קשר</option>
-            <option value="בונקר">בונקר</option><option value="הדרכה">הדרכה</option>
-            <option value="__c__">אחר...</option>
-          </select>
-        </div>
-        <div class="fg" style="min-width:130px;display:none;" id="peq-cat-cw"><label>שם קטגוריה</label><input id="peq-cat-c" placeholder="הקלד..."></div>
-        <div class="fg" style="flex:1;min-width:130px;"><label>חתום על ידי</label><input id="peq-signed-by" placeholder="שם החותם"></div>
-        <button class="btn bprim" onclick="addPlatoonEq()">הוסף</button>
-      </div>
-    </div>
-    <div class="frow" id="peq-filters"></div>
-    <div id="platoon-eq-list"></div>
-  </div>
-</div>
-
-<div class="scr" id="s-ammo">
-  <div class="card">
-    <h2>💥 דוח תחמושת</h2>
-    <div class="frow" style="margin-bottom:14px;">
-      <button class="fb active" id="ammo-tab-n" onclick="setAmmoTab('napitz')">נפיצה</button>
-      <button class="fb" id="ammo-tab-t" onclick="setAmmoTab('tachmish')">תחמיש</button>
-    </div>
-    <div id="ammo-n"><div id="ammo-n-list"></div></div>
-    <div id="ammo-t" style="display:none;"><div id="ammo-t-list"></div></div>
-    <div style="margin-top:16px;border-top:2px solid var(--bo);padding-top:12px;">
-      <h3 style="margin-bottom:10px;">הקצאה מחלקתית</h3><div id="ammo-allocation"></div>
-    </div>
-    <div id="ammo-footer" style="margin-top:10px;font-size:11px;color:var(--kh);text-align:left;"></div>
-  </div>
-  <div class="card"><h3>היסטוריית עדכונים</h3><div id="ammo-history"></div></div>
-</div>
-</body>
-</html>
