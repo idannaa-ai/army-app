@@ -407,6 +407,9 @@ function showS(id, btn) {
   if (id === 's-dash') renderDash();
   if (id === 's-nk')   renderNK();
   if (id === 's-inv')  renderInv();
+  if (id === 's-report' && window.renderReport) window.renderReport();
+  if (id === 's-platoon' && window.renderPlatoonEq) window.renderPlatoonEq();
+  if (id === 's-ammo' && window.renderAmmo) window.renderAmmo();
 }
 
 function toast(msg, dur) {
@@ -1395,6 +1398,18 @@ function handleFileUpload(input){
   reader.readAsArrayBuffer(file);
 }
 
+
+
+// Expose new feature functions to window
+window.renderReport = renderReport;
+window.renderPlatoonEq = renderPlatoonEq;
+window.renderAmmo = renderAmmo;
+window.repBack = repBack;
+window.submitAllReport = submitAllReport;
+window.addPlatoonEq = addPlatoonEq;
+window.setAmmoTab = setAmmoTab;
+window.downloadTemplate = downloadTemplate;
+window.handleFileUpload = handleFileUpload;
 </script>
 
 </body>
