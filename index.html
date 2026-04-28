@@ -208,7 +208,8 @@ input:focus,select:focus{outline:none;border-color:var(--ol)}
   <button class="ntab" onclick="showS('s-inv',this)">📦 ויסות</button>
   <button class="ntab" onclick="showS('s-dash',this)">📊 דשבורד</button>
   <button class="ntab" onclick="showS('s-new',this)">➕ חדש</button>
-  <button class="ntab" onclick="showS('s-platoon',this)">🏕️ ציוד פלוגתי</button>
+  <button class="ntab" onclick="showS('s-report',this)">📡 דיווח יומי <span id="rep-badge" style="background:rgba(255,255,255,.2);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;display:none;">0/5</span></button>
+<button class="ntab" onclick="showS('s-platoon',this)">🏕️ ציוד פלוגתי</button>
 </nav>
 
 <!-- SOLDIER -->
@@ -299,6 +300,61 @@ input:focus,select:focus{outline:none;border-color:var(--ol)}
 </div>
 
 <!-- NEW SOLDIER -->
+
+<!-- DAILY REPORT -->
+<div class="scr" id="s-report">
+  <div class="card">
+    <h2>📡 ירוק בעיניים — דיווח יומי</h2>
+    <div id="rep-step1">
+      <p style="font-size:13px;color:var(--kh);margin-bottom:16px;">בחר את המחלקה שלך לדיווח:</p>
+      <div id="rep-plat-btns" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;"></div>
+    </div>
+    <div id="rep-step2" style="display:none;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <button class="btn bsec bsm" onclick="repBack()">← חזור</button>
+        <span style="font-size:14px;font-weight:800;color:var(--old);" id="rep-plat-title"></span>
+        <span id="rep-already-done"></span>
+      </div>
+      <div id="rep-status-bar" style="margin-bottom:12px;"></div>
+      <div id="rep-soldiers-list"></div>
+      <button class="btn bprim" style="width:100%;padding:13px;font-size:13px;margin-top:12px;" onclick="submitAllReport()">📡 שלח דיווח מלא</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>📊 סטטוס דיווחים היום</h3>
+    <div id="report-daily-status"></div>
+  </div>
+  <div class="card">
+    <h3>📅 היסטוריית דיווחים (60 יום אחרונים)</h3>
+    <div id="report-history"></div>
+  </div>
+</div>
+
+<style>
+.rep-soldier{border:1px solid var(--bo);border-radius:var(--r);margin-bottom:10px;overflow:hidden;}
+.rep-sol-hdr{background:var(--old);color:var(--sal);padding:9px 14px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center;}
+.rep-sol-body{padding:10px 14px;}
+.rep-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bo);}
+.rep-item:last-child{border-bottom:none;}
+.rep-item-name{flex:1;font-size:12px;font-weight:600;color:var(--old);}
+.rep-btn{padding:4px 10px;border:2px solid var(--bo);border-radius:8px;background:#fff;font-family:Heebo,sans-serif;font-size:11px;font-weight:700;cursor:pointer;}
+.rep-btn.ok{background:#e8f4e8;border-color:var(--go);color:var(--go);}
+.rep-btn.miss{background:#fde8e6;border-color:var(--re);color:var(--re);}
+.rep-btn.warn{background:#fef3e2;border-color:var(--am);color:var(--am);}
+.rep-note{border:1px solid var(--bo);border-radius:6px;padding:4px 8px;font-size:11px;font-family:Heebo,sans-serif;width:120px;direction:rtl;}
+.status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:10px;}
+.status-card{border-radius:var(--r);padding:11px 14px;box-shadow:var(--sh);}
+.status-card.done{background:#e8f4e8;border-right:3px solid var(--go);}
+.status-card.miss{background:#fde8e6;border-right:3px solid var(--re);}
+.status-card.late{background:#fef3e2;border-right:3px solid var(--am);}
+.status-card-name{font-size:12px;font-weight:800;color:var(--old);}
+.status-card-sub{font-size:10px;color:var(--kh);margin-top:2px;}
+.hist-row{padding:10px 14px;border-bottom:1px solid var(--bo);font-size:12px;}
+.hist-date{font-weight:700;color:var(--old);margin-bottom:5px;display:flex;justify-content:space-between;}
+.hist-item{display:flex;gap:6px;padding:2px 0;flex-wrap:wrap;}
+.hist-ok{color:var(--go);}.hist-miss{color:var(--re);}.hist-warn{color:var(--am);}
+</style>
+
 <div class="scr" id="s-new">
   <div class="card">
     <h2>➕ הוספת חייל חדש</h2>
@@ -441,7 +497,7 @@ const INV_SEED      = JSON.parse(document.getElementById('d-inv').textContent);
 const PLATOONS      = ['1','2','3','חפק','מפלג'];
 
 // ── STATE ──
-var DB  = {soldiers:[], deleted:[]};
+var DB  = {soldiers:[], deleted:[], reports:{}};
 var INV = {actual:{},takan:{},edited:{},log:[]};
 
 // ── SYNC STATUS ──
@@ -725,7 +781,18 @@ async function initFB(){
       await set(ref(db,'inventory'),INV);
     }
 
+    // Load reports
+    var rsnap = await get(ref(db,'reports'));
+    DB.reports = rsnap.exists() ? (rsnap.val() || {}) : {};
+
     // Real-time listeners
+    onValue(ref(db,'reports'),function(snap){
+      DB.reports = snap.exists() ? (snap.val() || {}) : {};
+      if (document.getElementById('s-report') && document.getElementById('s-report').classList.contains('on')) {
+        renderReport();
+      }
+      updateReportBadge();
+    });
     onValue(ref(db,'deleted'),function(snap){
       DB.deleted=snap.exists()?(snap.val()||[]):[];
     });
@@ -845,6 +912,7 @@ function showS(id,btn){
   document.querySelectorAll('.ntab').forEach(function(t){t.classList.remove('active');});
   el(id).classList.add('on');
   if(btn)btn.classList.add('active');
+  if (id === 's-report') { renderReport(); }
   if(id==='s-comp')   renderComp();
   if(id==='s-dash')   renderDash();
   if(id==='s-nk')     renderNK();
@@ -1116,6 +1184,298 @@ function renderComp(){
     le.textContent='✅ אין חוסרים לוגיסטיים';le.style.color='var(--go)';le.style.fontWeight='600';
   }
 }
+
+
+// ══ DAILY REPORT (ירוק בעיניים) ══
+var DEADLINE = 18;
+var repSelPlat = null;
+
+function getTodayKey() {
+  var d = new Date();
+  return d.getFullYear() + '-' + (d.getMonth()+1).toString().padStart(2,'0') + '-' + d.getDate().toString().padStart(2,'0');
+}
+function isPastDeadline() {
+  return new Date().getHours() >= DEADLINE;
+}
+
+function renderReport() {
+  var today = getTodayKey();
+  DB.reports = DB.reports || {};
+  renderDailyStatus(today);
+  renderReportHistory();
+  var btnWrap = el('rep-plat-btns');
+  btnWrap.innerHTML = '';
+  var todayReps = DB.reports[today] || {};
+  PLATOONS.forEach(function(p) {
+    var done = todayReps[p] && todayReps[p].completed;
+    var solCount = DB.soldiers.filter(function(s){return s.platoon===p && Object.keys(s.nashkia||{}).length>0;}).length;
+    if (solCount === 0) return;
+    var btn = mk('div', {
+      style: 'border:2px solid '+(done?'var(--go)':'var(--bo)')+';border-radius:var(--rl);padding:14px;cursor:pointer;text-align:center;background:'+(done?'#e8f4e8':'var(--wh)')+';transition:all .2s;',
+      onclick: function(){ openRepPlat(p); }
+    });
+    btn.appendChild(mk('div', {style:'font-size:17px;font-weight:900;color:var(--old);', txt:'מחלקה '+p}));
+    btn.appendChild(mk('div', {style:'font-size:11px;color:var(--kh);margin-top:3px;', txt:solCount+' חיילים'}));
+    if (done) {
+      btn.appendChild(mk('div', {style:'font-size:11px;font-weight:700;color:var(--go);margin-top:5px;', txt:'✅ דווח ב-'+todayReps[p].time}));
+    } else {
+      btn.appendChild(mk('div', {style:'font-size:11px;color:var(--re);margin-top:5px;font-weight:600;', txt:isPastDeadline()?'⏰ לא דווח':'⏳ ממתין'}));
+    }
+    btnWrap.appendChild(btn);
+  });
+  el('rep-step1').style.display = 'block';
+  el('rep-step2').style.display = 'none';
+  updateReportBadge();
+}
+
+function updateReportBadge() {
+  var today = getTodayKey();
+  var todayReps = (DB.reports||{})[today] || {};
+  var doneCount = 0, totalCount = 0;
+  PLATOONS.forEach(function(p) {
+    var solCount = DB.soldiers.filter(function(s){return s.platoon===p && Object.keys(s.nashkia||{}).length>0;}).length;
+    if (solCount > 0) {
+      totalCount++;
+      if (todayReps[p] && todayReps[p].completed) doneCount++;
+    }
+  });
+  var badge = el('rep-badge');
+  if (badge) {
+    badge.style.display = 'inline-block';
+    badge.textContent = doneCount + '/' + totalCount;
+    badge.style.background = doneCount === totalCount ? 'var(--go)' : (isPastDeadline() ? 'var(--re)' : 'rgba(255,255,255,.2)');
+  }
+}
+
+function openRepPlat(plat) {
+  repSelPlat = plat;
+  var today = getTodayKey();
+  el('rep-step1').style.display = 'none';
+  el('rep-step2').style.display = 'block';
+  el('rep-plat-title').textContent = 'מחלקה ' + plat;
+  
+  var sb = el('rep-status-bar');
+  sb.innerHTML = '';
+  var past = isPastDeadline();
+  var bar = mk('div', {style:'padding:9px 13px;border-radius:var(--r);font-size:12px;font-weight:700;background:'+(past?'#fde8e6':'#e8f4e8')+';color:'+(past?'var(--re)':'var(--go)')});
+  bar.textContent = past ? '⏰ עבר הדד-ליין (18:00) — ניתן לדווח בדיעבד' : '⏳ דד-ליין: 18:00';
+  sb.appendChild(bar);
+  
+  var todayRep = ((DB.reports||{})[today]||{})[plat];
+  var doneEl = el('rep-already-done');
+  doneEl.innerHTML = '';
+  if (todayRep && todayRep.completed) {
+    var done = mk('span', {style:'background:#e8f4e8;color:var(--go);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;', txt:'דווח ע"י '+todayRep.reporter+' ב-'+todayRep.time});
+    doneEl.appendChild(done);
+  }
+  
+  var sols = DB.soldiers.filter(function(s){return s.platoon===plat && Object.keys(s.nashkia||{}).length>0;}).sort(function(a,b){return a.name.localeCompare(b.name,'he');});
+  var list = el('rep-soldiers-list');
+  list.innerHTML = '';
+  if (!sols.length) {
+    list.innerHTML = '<div class="nd">אין חיילים עם נשקייה במחלקה זו</div>';
+    return;
+  }
+  
+  sols.forEach(function(s) {
+    var prev = todayRep ? (todayRep.soldiers||{})[s.pid] : null;
+    var wrap = mk('div', {cls:'rep-soldier'});
+    
+    var hdr = mk('div', {cls:'rep-sol-hdr'});
+    hdr.appendChild(mk('span', {txt: s.name + (s.role ? ' - '+s.role : '')}));
+    var gWrap = mk('div', {style:'display:flex;align-items:center;gap:6px;'});
+    gWrap.appendChild(mk('span', {style:'font-size:11px;color:var(--sal);', txt:'רימונים:'}));
+    var gInp = mk('input', {type:'number', style:'width:45px;padding:3px 6px;border-radius:6px;border:none;font-size:12px;text-align:center;', placeholder:'0'});
+    gInp.id = 'gren_' + s.pid;
+    if (prev) gInp.value = prev.grenades || '';
+    gWrap.appendChild(gInp);
+    gWrap.appendChild(mk('span', {style:'font-size:10px;opacity:.6;color:var(--sal);', txt:'/2'}));
+    hdr.appendChild(gWrap);
+    wrap.appendChild(hdr);
+    
+    var body = mk('div', {cls:'rep-sol-body'});
+    Object.keys(s.nashkia||{}).sort().forEach(function(item) {
+      var pi = prev ? (prev.items||{})[item] : null;
+      var row = mk('div', {cls:'rep-item'});
+      row.appendChild(mk('span', {cls:'rep-item-name', txt:item}));
+      
+      var bg = mk('div', {style:'display:flex;gap:5px;'});
+      ['ok','miss','warn'].forEach(function(st) {
+        var b = mk('button', {cls: 'rep-btn' + (pi && pi.status===st ? ' '+st : '')});
+        b.textContent = st==='ok' ? 'קיים' : st==='miss' ? 'חסר' : 'לא תקין';
+        b.id = 'rb_' + s.pid + '__' + encodeURIComponent(item) + '__' + st;
+        b.onclick = (function(pid, it, status, btn) {
+          return function() {
+            ['ok','miss','warn'].forEach(function(x){
+              var sib = document.getElementById('rb_'+pid+'__'+encodeURIComponent(it)+'__'+x);
+              if (sib) sib.className = 'rep-btn';
+            });
+            btn.className = 'rep-btn ' + status;
+          };
+        })(s.pid, item, st, b);
+        bg.appendChild(b);
+      });
+      row.appendChild(bg);
+      
+      var note = mk('input', {cls:'rep-note', placeholder:'הערה...'});
+      note.id = 'rn_' + s.pid + '__' + encodeURIComponent(item);
+      if (pi && pi.note) note.value = pi.note;
+      row.appendChild(note);
+      body.appendChild(row);
+    });
+    wrap.appendChild(body);
+    list.appendChild(wrap);
+  });
+}
+
+function repBack() {
+  el('rep-step1').style.display = 'block';
+  el('rep-step2').style.display = 'none';
+  repSelPlat = null;
+}
+
+function submitAllReport() {
+  if (!repSelPlat) return;
+  var today = getTodayKey();
+  var sols = DB.soldiers.filter(function(s){return s.platoon===repSelPlat && Object.keys(s.nashkia||{}).length>0;});
+  var soldierData = {};
+  
+  sols.forEach(function(s) {
+    var items = {};
+    Object.keys(s.nashkia||{}).forEach(function(item) {
+      var st = 'ok';
+      ['ok','miss','warn'].forEach(function(x){
+        var b = document.getElementById('rb_'+s.pid+'__'+encodeURIComponent(item)+'__'+x);
+        if (b && b.classList.contains(x)) st = x;
+      });
+      var note = document.getElementById('rn_'+s.pid+'__'+encodeURIComponent(item));
+      items[item] = {status: st, note: note ? note.value : ''};
+    });
+    var gInp = document.getElementById('gren_'+s.pid);
+    soldierData[s.pid] = {
+      items: items,
+      grenades: gInp ? (parseInt(gInp.value)||0) : 0
+    };
+  });
+  
+  DB.reports = DB.reports || {};
+  DB.reports[today] = DB.reports[today] || {};
+  DB.reports[today][repSelPlat] = {
+    soldiers: soldierData,
+    reporter: (currentUser && currentUser.name) || 'לא ידוע',
+    time: new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}),
+    platoon: repSelPlat,
+    completed: true,
+    timestamp: Date.now()
+  };
+  
+  // Sync deficiencies to soldiers (status of items)
+  sols.forEach(function(s) {
+    var rep = soldierData[s.pid];
+    Object.keys(rep.items).forEach(function(item) {
+      if (s.nashkia[item]) {
+        s.nashkia[item].status = rep.items[item].status === 'ok' ? 'present' : 'missing';
+      }
+    });
+  });
+  
+  saveDB();
+  if (typeof saveReports === 'function') saveReports();
+  toast('✅ דיווח נשמר - מחלקה ' + repSelPlat);
+  repBack();
+  renderReport();
+}
+
+function renderDailyStatus(today) {
+  var el2 = el('report-daily-status');
+  if (!el2) return;
+  el2.innerHTML = '';
+  var tr = (DB.reports||{})[today] || {};
+  var past = isPastDeadline();
+  var doneCount = 0, totalCount = 0;
+  
+  var grid = mk('div', {cls:'status-grid'});
+  PLATOONS.forEach(function(p) {
+    var solCount = DB.soldiers.filter(function(s){return s.platoon===p && Object.keys(s.nashkia||{}).length>0;}).length;
+    if (solCount === 0) return;
+    totalCount++;
+    var rep = tr[p];
+    var done = rep && rep.completed;
+    if (done) doneCount++;
+    var card = mk('div', {cls:'status-card '+(done?'done':past?'late':'miss')});
+    card.appendChild(mk('div', {cls:'status-card-name', txt:'מחלקה '+p}));
+    card.appendChild(mk('div', {cls:'status-card-sub', txt: done ? rep.reporter+' - '+rep.time : (past ? 'לא דווח' : 'ממתין')}));
+    grid.appendChild(card);
+  });
+  
+  if (totalCount > 0 && doneCount === totalCount) {
+    var ok = mk('div', {style:'background:var(--go);color:#fff;border-radius:var(--r);padding:11px;font-size:13px;font-weight:800;margin-bottom:10px;text-align:center;', txt:'✅ כל המחלקות דיווחו!'});
+    el2.appendChild(ok);
+  }
+  el2.appendChild(grid);
+}
+
+function renderReportHistory() {
+  var el2 = el('report-history');
+  if (!el2) return;
+  el2.innerHTML = '';
+  var reports = DB.reports || {};
+  var dates = Object.keys(reports).sort().reverse().slice(0,60);
+  if (!dates.length) {
+    el2.innerHTML = '<div class="nd">אין היסטוריית דיווחים</div>';
+    return;
+  }
+  
+  dates.forEach(function(date) {
+    var dayReps = reports[date];
+    var wrap = mk('div', {cls:'hist-row'});
+    var allDone = true;
+    var totalPlats = 0;
+    PLATOONS.forEach(function(p) {
+      var solCount = DB.soldiers.filter(function(s){return s.platoon===p && Object.keys(s.nashkia||{}).length>0;}).length;
+      if (solCount > 0) {
+        totalPlats++;
+        if (!dayReps[p] || !dayReps[p].completed) allDone = false;
+      }
+    });
+    
+    var hdr = mk('div', {cls:'hist-date'});
+    hdr.appendChild(mk('span', {txt:date}));
+    hdr.appendChild(mk('span', {style:'color:'+(allDone?'var(--go)':'var(--re)'), txt:(allDone?'✅ הכל':'⚠️ חלקי')}));
+    wrap.appendChild(hdr);
+    
+    PLATOONS.forEach(function(p) {
+      var solCount = DB.soldiers.filter(function(s){return s.platoon===p && Object.keys(s.nashkia||{}).length>0;}).length;
+      if (solCount === 0) return;
+      var rep = dayReps[p];
+      var row = mk('div', {cls:'hist-item'});
+      if (!rep) {
+        row.appendChild(mk('span', {cls:'hist-miss', txt:'מחלקה '+p+' - לא דווח'}));
+      } else {
+        var ok = 0, miss = 0, warn = 0;
+        Object.values(rep.soldiers||{}).forEach(function(sol) {
+          Object.values(sol.items||{}).forEach(function(it) {
+            if (it.status === 'ok') ok++;
+            else if (it.status === 'miss') miss++;
+            else if (it.status === 'warn') warn++;
+          });
+        });
+        var cls = (miss > 0) ? 'hist-warn' : 'hist-ok';
+        var info = 'מחלקה '+p+' | '+rep.reporter+' '+rep.time;
+        if (miss > 0) info += ' | '+miss+' חסר';
+        if (warn > 0) info += ' | '+warn+' לא תקין';
+        row.appendChild(mk('span', {cls:cls, txt:info}));
+      }
+      wrap.appendChild(row);
+    });
+    el2.appendChild(wrap);
+  });
+}
+
+function saveReports() {
+  set(ref(db,'reports'), DB.reports || {}).catch(function(){if(typeof setSS==='function')setSS('err');});
+}
+
 
 // ── NASHKIA ──
 var nkFlt='all',nkSel=null;
